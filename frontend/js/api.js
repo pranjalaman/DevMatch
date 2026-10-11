@@ -3,20 +3,10 @@
 // true = use the demo server in mock.js, false = use the real backend
 let useDemoData = false;
 
-// Checks if the real backend is running. If not, we switch to demo data.
+// We always use the real backend now.
+// Add ?mock to the page address (e.g. localhost:8080/?mock) to use the demo data instead.
 async function checkBackend() {
-  // Adding ?mock to the page address forces demo mode
   if (location.search.includes('mock')) {
-    useDemoData = true;
-    return;
-  }
-  try {
-    const response = await fetch('/api/health');
-    const contentType = response.headers.get('content-type') || '';
-    if (!response.ok || !contentType.includes('json')) {
-      useDemoData = true;
-    }
-  } catch (error) {
     useDemoData = true;
   }
 }
@@ -69,6 +59,9 @@ async function callApi(method, path, body) {
     if (data && data.error) {
       message = data.error.message || message;
       fields = data.error.fields || {};
+    } else if (status === 404) {
+      // FastAPI's own "Not Found" answer, e.g. the backend doesn't have this route yet
+      message = 'Not found (the server doesn’t have this yet).';
     }
     throw makeApiError(status, message, fields);
   }
