@@ -306,7 +306,7 @@ the project. Projects without roles have no derived skill tags and receive no
 stack-coverage contribution.
 
 ### 8.4 `GET /projects/{id}` additions
-Adds `description`, `roles[{id,title,skills[],filled}]`, `repo_url`, `repo_meta`, `created_at`. Adds `contact_email` and `contact_url` **only if authenticated**.
+Adds `description`, `roles[{id,title,skills[],filled}]`, `repo_url`, `repo_meta`, `created_at`. Adds `contact_email` and `contact_url` **only if authenticated**. The detail response does not repeat project `skills`; clients derive the displayed stack from role skills. The list response retains the combined `skills` field for cards and filtering.
 
 ### 8.5 Validation limits
 Title ≤80, summary ≤200, description ≤4000, role title ≤60, ≤10 roles per project, ≤15 distinct required skills across a project's roles, ≤30 skills per user, password ≥8 chars. Role skill values must be canonical slugs present in the `skills` table. `repo_url` must match `^https://github\.com/[\w.-]+/[\w.-]+/?$`.

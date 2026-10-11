@@ -109,10 +109,13 @@ function drawModal(project) {
   const modal = document.getElementById('modal');
   const isOwner = currentUser !== null && project.owner.id === currentUser.id;
   const openRoleCount = project.roles.filter(function (role) { return !role.filled; }).length;
+  const projectSkills = Array.from(new Set(
+    project.roles.flatMap(function (role) { return role.skills; })
+  )).sort();
 
   // --- Tech stack chips ---
   let stackChips = '';
-  for (const slug of project.skills) {
+  for (const slug of projectSkills) {
     stackChips += `<li class="chip chip-tag" data-tone="${chipColour(slug)}">${escapeHtml(skillLabel(slug))}</li>`;
   }
 
