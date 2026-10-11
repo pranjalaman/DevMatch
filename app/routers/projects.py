@@ -84,13 +84,15 @@ def _format_project(
         "id": row["id"],
         "title": row["title"],
         "summary": row["summary"],
-        "skills": skills,
         "open_roles": len(open_roles),
         "status": row["status"],
         "owner": {"id": row["owner_id"], "name": row["owner_name"]},
         "created_at": row["created_at"],
         "match": None,
     }
+
+    if not include_details:
+        result["skills"] = skills
 
     if user_id is not None and user_skills:
         match = calculate_match(user_skills, skills, roles)
