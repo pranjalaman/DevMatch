@@ -130,7 +130,7 @@ GitHub REST API (repo metadata)
 | API docs | Auto-generated at `/docs` | Free endpoint testing for the frontend dev; disable in production if desired |
 | DB access | `psycopg` (v3) with parameterized SQL | No ORM overhead; every query reviewable |
 | Matching | Pure Python functions in `matcher.py` | Unit-testable, explainable, no model dependency |
-| Migrations | Plain numbered `.sql` files in `/migrations` | Simple, no tooling |
+| Database provisioning | Existing pre-provisioned PostgreSQL database | Schema, canonical skills, and demo data are managed outside this repository |
 
 ---
 
@@ -373,7 +373,7 @@ Loading (skeleton cards) · Empty (message + action) · Error (message + retry) 
 | **Rate limiting** | Auth endpoints: 10/min/IP. Writes: 60/min/user. (`slowapi`, in-memory is fine for v1.) |
 | **Reliability** | `/api/health` endpoint. GitHub and any LLM calls are fail-soft. |
 | **Observability** | Structured request logs (method, path, status, duration). No PII in logs. |
-| **Config** | All secrets via environment variables. `.env` committed; `.env` git-ignored. |
+| **Config** | All secrets via environment variables. Use local `.env`; keep it git-ignored and never commit secrets. |
 
 ---
 
@@ -405,29 +405,32 @@ devmatch/
 │  ├─ schemas/           # Pydantic models: auth.py, profile.py, user.py (§8.5 limits live here)
 │  ├─ matcher.py         # pure functions (§7)
 │  └─ github_client.py
-├─ migrations/           # 001_init.sql, 002_seed_skills.sql
-├─ seed/seed_demo.py     # demo users + projects
-├─ static/               # frontend (§10.1)
-└─ tests/
-   ├─ test_matcher.py
-   └─ test_api.py
+├─ frontend/             # static HTML/CSS/JavaScript app
+└─ render.yaml           # Render web-service configuration
 ```
 
 ---
 
 ## 14. Testing Strategy
 
-- **Unit (required):** `matcher.py` — all cases in §7.4 plus normalization aliases.
-- **API (required):** signup/login, create project, owner-only enforcement (`403`), contact fields hidden when logged out, validation errors.
-- **Manual smoke checklist (before demo):** signup → add skills → feed re-ranks → open popup via card and via deep link → contact/repo links work → create project → mark role filled → logout hides contact info.
-- Run with `pytest`. CI is optional; if added, a single GitHub Action running `pytest` is enough.
+Automated tests are not checked into this repository. The existing database has
+demo data, but that does not replace validating application changes; run an
+external test suite when available and complete the smoke checklist manually:
+
+- Signup/login, add skills, and confirm the feed re-ranks.
+- Open a project from a card and by deep link; verify Escape, click-outside,
+  close button, keyboard focus trapping, and focus restoration.
+- Check logged-out contact privacy, then contact and repository links after login.
+- Create/edit/delete a project, change role status, and verify another account
+  cannot edit or delete it.
+- Exercise loading, empty, retry, and validation-error states.
 
 ---
 
 ## 15. Deployment
 
 - **Render** web service, Python runtime. Build: `pip install -r requirements.txt`. Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-- **Neon** database; run `migrations/*.sql` in order, then `seed/seed_demo.py`.
+- **Neon** database is provisioned and seeded outside this repository.
 - Set env vars in Render dashboard. Health check path `/api/health`.
 - Free tier sleeps after inactivity: **hit the URL a few minutes before the demo** to warm it up.
 - Keep a local run path (`uvicorn app.main:app --reload`) as a fallback if venue Wi-Fi fails.
@@ -436,7 +439,7 @@ devmatch/
 
 ## 16. Demo Data
 
-Seed at least: 12 users across 5 branches and 4 year groups, 10 projects (mix of open/closed), 2–3 open roles on most open projects, ~80 skills. Include at least one project that is a perfect match for a prepared demo account so the ranking is visible in the demo.
+The existing database contains the demo users, projects, canonical skills, and match-ready examples. Manage changes to that data outside this repository.
 
 ---
 
@@ -447,7 +450,7 @@ Seed at least: 12 users across 5 branches and 4 year groups, 10 projects (mix of
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
 | **M0 — by Oct 8** | Abstract submitted, MLH registration done, repo created with this SPEC | Repo URL filled in the abstract form |
-| **M1 — Schema + skeleton** | Migrations, seed skills, FastAPI app, `/api/health`, deployed to Render | `/api/health` returns 200 on the live URL |
+| **M1 — Schema + skeleton** | Provisioned database, FastAPI app, `/api/health`, deployed to Render | `/api/health` returns 200 on the live URL |
 | **M2 — Auth + profile** | F1, F2 | US-1 acceptance criteria pass |
 | **M3 — Projects + feed** | F3, F4, F5 | US-2, US-3, US-4 pass |
 | **M4 — Matching** | F6 with tests | US-5 passes, §7.4 tests green |

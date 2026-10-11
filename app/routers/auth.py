@@ -1,6 +1,7 @@
 import psycopg
 from app.database.db import get_db
 from app.schemas.auth import AuthResponse, LoginData, SignupData
+from app.rate_limit import enforce_auth_limit, enforce_write_limit
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pwdlib import PasswordHash
 
@@ -8,7 +9,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 password_hash = PasswordHash.recommended()
 
 
-@router.post("/signup", status_code=201, response_model=AuthResponse)
+@router.post(
+    "/signup",
+    status_code=201,
+    response_model=AuthResponse,
+    dependencies=[Depends(enforce_auth_limit)],
+)
 def signup(data: SignupData, request: Request, connection=Depends(get_db)):
     try:
         user = connection.execute(
@@ -34,7 +40,11 @@ def signup(data: SignupData, request: Request, connection=Depends(get_db)):
     return {"user": user}
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    dependencies=[Depends(enforce_auth_limit)],
+)
 def login(data: LoginData, request: Request, connection=Depends(get_db)):
     try:
         user = connection.execute(
@@ -60,8 +70,10 @@ def login(data: LoginData, request: Request, connection=Depends(get_db)):
 
 @router.post("/logout")
 def logout(request: Request):
-    if "user_id" not in request.session:
+    user_id = request.session.get("user_id")
+    if not user_id:
         raise HTTPException(status_code=401, detail="Please log in first")
+    enforce_write_limit(user_id)
 
     request.session.clear()
     return {"message": "Logged out"}

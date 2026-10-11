@@ -137,22 +137,29 @@ function drawModal(project) {
 
   // --- GitHub repository stats ---
   let repoSection = '';
-  if (project.repo_meta) {
+  if (project.repo_meta || (isOwner && project.repo_url)) {
     let refreshButton = '';
-    if (isOwner) {
+    if (isOwner && project.repo_url) {
       refreshButton = `<button class="btn btn-sm" type="button" id="refresh-repo">${icon('refresh', 14)} Refresh</button>`;
     }
     let language = '';
-    if (project.repo_meta.language) {
+    if (project.repo_meta && project.repo_meta.language) {
       language = `<span>${icon('code', 14)} ${escapeHtml(project.repo_meta.language)}</span>`;
+    }
+    let repoStats = '<span class="muted">Repository stats are unavailable.</span>';
+    if (project.repo_meta) {
+      const stars = `<span>${icon('star', 14)} ${project.repo_meta.stars} stars</span>`;
+      let pushedAt = '';
+      if (project.repo_meta.pushed_at) {
+        pushedAt = `<span>${icon('clock', 14)} Last push ${formatDate(project.repo_meta.pushed_at)}</span>`;
+      }
+      repoStats = `${stars}${language}${pushedAt}`;
     }
     repoSection = `
       <section class="modal-section">
         <h3>Repository</h3>
         <div class="repo-stats">
-          <span>${icon('star', 14)} ${project.repo_meta.stars} stars</span>
-          ${language}
-          <span>${icon('clock', 14)} Last push ${formatDate(project.repo_meta.pushed_at)}</span>
+          ${repoStats}
           ${refreshButton}
         </div>
       </section>`;
@@ -384,7 +391,15 @@ async function loadSuggestions(projectId) {
       roleBox.insertAdjacentHTML('beforeend', html);
     }
   } catch (error) {
-    // Suggestions are optional, so if they fail we just don't show them
+    if (projectId === openProjectId) {
+      const roles = document.querySelectorAll('.role-item');
+      roles.forEach(function (role) {
+        const message = document.createElement('p');
+        message.className = 'field-error';
+        message.textContent = 'Couldn’t load suggested teammates. ' + error.message;
+        role.appendChild(message);
+      });
+    }
   }
 }
 

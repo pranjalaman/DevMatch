@@ -1,24 +1,24 @@
+from difflib import get_close_matches
+
 from app.database.db import get_db
+from app.matcher import normalize_skill
+from app.rate_limit import enforce_write_limit
 from app.schemas.profile import ProfileResponse, SkillsData, SkillsResponse
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 router = APIRouter(prefix="/api", tags=["profile"])
-
-SKILL_ALIASES = {
-    "js": "javascript",
-    "py": "python",
-    "reactjs": "react",
-    "node": "nodejs",
-    "postgres": "postgresql",
-    "ml": "machine-learning",
-    "cpp": "c++",
-}
 
 
 def require_user_id(request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Please log in first")
+    return user_id
+
+
+def require_write_user_id(request: Request):
+    user_id = require_user_id(request)
+    enforce_write_limit(user_id)
     return user_id
 
 
@@ -62,7 +62,7 @@ def replace_my_skills(
     request: Request,
     connection=Depends(get_db),
 ):
-    user_id = require_user_id(request)
+    user_id = require_write_user_id(request)
 
     user_exists = connection.execute(
         "SELECT id FROM users WHERE id = %s", (user_id,)
@@ -73,8 +73,7 @@ def replace_my_skills(
 
     skills = []
     for skill in data.skills:
-        normalized = " ".join(skill.lower().split())
-        normalized = SKILL_ALIASES.get(normalized, normalized)
+        normalized = normalize_skill(skill)
         if normalized and normalized not in skills:
             skills.append(normalized)
 
@@ -85,9 +84,28 @@ def replace_my_skills(
         found_skills = {row["slug"] for row in found}
         unknown_skills = [skill for skill in skills if skill not in found_skills]
         if unknown_skills:
+            all_skills = connection.execute("SELECT slug FROM skills").fetchall()
+            known_slugs = [row["slug"] for row in all_skills]
+            suggestions = []
+            for skill in unknown_skills:
+                close = get_close_matches(skill, known_slugs, n=3, cutoff=0.55)
+                suggestions.extend(close)
+            suggestion_text = (
+                f". Did you mean: {', '.join(dict.fromkeys(suggestions))}?"
+                if suggestions
+                else ""
+            )
             raise HTTPException(
                 status_code=422,
-                detail=f"Unknown skills: {', '.join(unknown_skills)}",
+                detail={
+                    "message": "Invalid input",
+                    "fields": {
+                        "skills": (
+                            f"Unknown skills: {', '.join(unknown_skills)}"
+                            f"{suggestion_text}"
+                        )
+                    },
+                },
             )
 
     connection.execute("DELETE FROM user_skills WHERE user_id = %s", (user_id,))

@@ -17,7 +17,7 @@ async function checkBackend() {
 //   error.message - text to show the user
 //   error.status  - HTTP status code (401 = not logged in, 404 = not found, ...)
 //   error.fields  - problems with form fields, like { title: 'Max 80 characters' }
-async function callApi(method, path, body) {
+async function callApi(method, path, body, requestOptions) {
   let status;
   let data;
 
@@ -31,6 +31,9 @@ async function callApi(method, path, body) {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin', // send the login cookie
     };
+    if (requestOptions && requestOptions.signal) {
+      options.signal = requestOptions.signal;
+    }
     if (body) {
       options.body = JSON.stringify(body);
     }
@@ -39,6 +42,9 @@ async function callApi(method, path, body) {
     try {
       response = await fetch('/api' + path, options);
     } catch (networkProblem) {
+      if (networkProblem.name === 'AbortError') {
+        throw networkProblem;
+      }
       throw makeApiError(0, 'Network error. Check your connection and try again.', {});
     }
 

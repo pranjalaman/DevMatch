@@ -7,6 +7,7 @@ const POPULAR_SKILLS = ['python', 'react', 'javascript', 'machine-learning', 'fa
 // Counts how many times we asked for projects.
 // If the user types fast, older answers can arrive late - we ignore those.
 let feedRequestNumber = 0;
+let feedRequestController = null;
 
 function showFeedPage() {
   // If the feed is already on screen (e.g. we just closed the popup), keep it as it is
@@ -134,6 +135,11 @@ function clearFilters() {
 async function loadProjects() {
   feedRequestNumber = feedRequestNumber + 1;
   const thisRequest = feedRequestNumber;
+  if (feedRequestController) {
+    feedRequestController.abort();
+  }
+  feedRequestController = new AbortController();
+  const thisController = feedRequestController;
 
   const grid = document.getElementById('project-grid');
   const info = document.getElementById('feed-info');
@@ -160,12 +166,17 @@ async function loadProjects() {
   params.append('page_size', PAGE_SIZE);
 
   try {
-    const answer = await callApi('GET', '/projects?' + params.toString());
+    const answer = await callApi('GET', '/projects?' + params.toString(), undefined, {
+      signal: thisController.signal,
+    });
     if (thisRequest !== feedRequestNumber) {
       return; // a newer request was started, so ignore this old answer
     }
     drawProjects(answer);
   } catch (error) {
+    if (error.name === 'AbortError') {
+      return;
+    }
     if (thisRequest !== feedRequestNumber) {
       return;
     }
