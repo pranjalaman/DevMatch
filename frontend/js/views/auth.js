@@ -7,16 +7,10 @@ function showLoginPage() {
     return;
   }
 
-  let demoHint = '';
-  if (useDemoData) {
-    demoHint = '<p class="demo-hint">Demo mode: log in with demo@devmatch.dev / demo1234</p>';
-  }
-
   mainArea.innerHTML = `
     <section class="panel auth-card" aria-labelledby="auth-title">
       <h1 id="auth-title">Welcome back</h1>
       <p>Log in to see contact details and your matches.</p>
-      ${demoHint}
       <form class="form" id="login-form" novalidate>
         <div class="form-error" id="form-error" role="alert" hidden></div>
         ${fieldHtml('email', 'Email', '<input class="input" id="email" type="email" autocomplete="email" placeholder="you@example.com" aria-describedby="email-error">')}
