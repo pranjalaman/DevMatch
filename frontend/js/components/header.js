@@ -41,28 +41,60 @@ function drawHeader() {
       </a>
       <form class="search" role="search" id="search-form">
         ${icon('search', 16)}
-        <input class="input" type="search" id="search-input" placeholder="Search projects…"
+        <input class="input" type="search" id="search-input" placeholder="Search projects… (min 3 chars)"
           aria-label="Search projects by title or summary" autocomplete="off">
+        <div class="search-validator" id="search-validator" hidden aria-live="polite"></div>
       </form>
       <div class="header-actions">${rightSide}</div>
     </div>`;
 
   // --- Search box ---
   const searchInput = document.getElementById('search-input');
+  const searchValidator = document.getElementById('search-validator');
   searchInput.value = feedFilters.search;
+
+  function updateSearchValidation(text) {
+    const trimmed = text.trim();
+    if (trimmed.length > 0 && trimmed.length < 3) {
+      if (searchValidator) {
+        searchValidator.hidden = false;
+        searchValidator.textContent = `Enter at least 3 characters to search (${trimmed.length}/3)`;
+      }
+      return false;
+    }
+    if (searchValidator) {
+      searchValidator.hidden = true;
+      searchValidator.textContent = '';
+    }
+    return true;
+  }
 
   // Wait until the user stops typing for 300ms before searching
   searchInput.addEventListener('input', function () {
     clearTimeout(searchTimer);
+    const valid = updateSearchValidation(searchInput.value);
     searchTimer = setTimeout(function () {
-      runSearch(searchInput.value);
+      if (valid) {
+        runSearch(searchInput.value);
+      } else if (searchInput.value.trim() === '') {
+        runSearch('');
+      }
     }, 300);
   });
 
   document.getElementById('search-form').addEventListener('submit', function (event) {
     event.preventDefault();
     clearTimeout(searchTimer);
-    runSearch(searchInput.value);
+    const valid = updateSearchValidation(searchInput.value);
+    if (valid) {
+      runSearch(searchInput.value);
+    } else {
+      if (searchValidator) {
+        searchValidator.hidden = false;
+        searchValidator.textContent = 'Please enter at least 3 characters to search.';
+      }
+      searchInput.focus();
+    }
   });
 
   // --- Account menu ---
@@ -103,6 +135,10 @@ document.addEventListener('keydown', function (event) {
 
 function runSearch(text) {
   const search = text.trim();
+  // If text is between 1 and 2 characters, validator blocks search
+  if (search.length > 0 && search.length < 3) {
+    return;
+  }
   if (search === feedFilters.search) {
     return; // nothing changed
   }

@@ -59,6 +59,28 @@ function drawFilters() {
     chips += `<button class="filter-chip" type="button" data-skill="${slug}" aria-pressed="${isOn}">${escapeHtml(skillLabel(slug))}</button>`;
   }
 
+  // Draw any active skill filters that aren't in the popular list
+  for (const slug of feedFilters.skills) {
+    if (!POPULAR_SKILLS.includes(slug)) {
+      chips += `<button class="filter-chip is-custom" type="button" data-skill="${slug}" aria-pressed="true">${escapeHtml(skillLabel(slug))} &times;</button>`;
+    }
+  }
+
+  // Dropdown for filtering by ANY skill with instant search
+  const skillDropdownHtml = `
+    <div class="feed-skill-dropdown-wrap">
+      <button class="filter-chip feed-skill-dropdown-toggle" id="feed-skill-dropdown-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        ${icon('search', 12)} More skills ${icon('chevronDown', 12)}
+      </button>
+      <div class="feed-skill-menu" id="feed-skill-menu" hidden>
+        <div class="feed-skill-search-box">
+          <input type="text" class="feed-skill-search-input" id="feed-skill-search-input"
+            placeholder="Search skills to filter…" autocomplete="off">
+        </div>
+        <ul class="feed-skill-menu-list" id="feed-skill-menu-list"></ul>
+      </div>
+    </div>`;
+
   // "Best match / Newest" only makes sense when the user has skills
   let sortButtons = '';
   if (userHasSkills()) {
@@ -71,7 +93,7 @@ function drawFilters() {
 
   const toolbar = document.getElementById('feed-toolbar');
   toolbar.innerHTML = `
-    <div class="filter-chips" role="group" aria-label="Filter by skill">${chips}</div>
+    <div class="filter-chips" role="group" aria-label="Filter by skill">${chips}${skillDropdownHtml}</div>
     <div class="toolbar-controls">
       <select class="select" id="status-filter" aria-label="Project status">
         <option value="open">Open projects</option>
@@ -81,11 +103,14 @@ function drawFilters() {
     </div>`;
 
   // Skill chips
-  toolbar.querySelectorAll('.filter-chip').forEach(function (button) {
+  toolbar.querySelectorAll('.filter-chip[data-skill]').forEach(function (button) {
     button.onclick = function () {
       toggleSkillFilter(button.dataset.skill);
     };
   });
+
+  // Setup "More skills" dropdown in the toolbar
+  setupFeedSkillDropdown();
 
   // Open / closed dropdown
   const statusFilter = document.getElementById('status-filter');
@@ -107,6 +132,81 @@ function drawFilters() {
   });
 }
 
+function setupFeedSkillDropdown() {
+  const toggleBtn = document.getElementById('feed-skill-dropdown-btn');
+  const menu = document.getElementById('feed-skill-menu');
+  const searchInput = document.getElementById('feed-skill-search-input');
+  const list = document.getElementById('feed-skill-menu-list');
+
+  if (!toggleBtn || !menu || !searchInput || !list) return;
+
+  function renderFeedSkills() {
+    const query = searchInput.value.trim().toLowerCase();
+    const skills = Array.isArray(allSkills) && allSkills.length > 0 ? allSkills : [];
+
+    // Validator: only search if at least 3 characters entered
+    if (query.length > 0 && query.length < 3) {
+      list.innerHTML = `<li class="feed-skill-menu-empty">Enter at least 3 characters to filter (${query.length}/3)</li>`;
+      return;
+    }
+
+    const filtered = skills.filter(function (s) {
+      return !query || s.label.toLowerCase().includes(query) || s.slug.toLowerCase().includes(query);
+    });
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<li class="feed-skill-menu-empty">No skills match "${escapeHtml(query)}"</li>`;
+      return;
+    }
+
+    let itemsHtml = '';
+    filtered.forEach(function (s) {
+      const active = feedFilters.skills.includes(s.slug);
+      itemsHtml += `
+        <li class="feed-skill-menu-item ${active ? 'is-active' : ''}" data-slug="${s.slug}">
+          <span>${escapeHtml(s.label)}</span>
+          ${active ? icon('check', 12) : ''}
+        </li>`;
+    });
+    list.innerHTML = itemsHtml;
+
+    list.querySelectorAll('.feed-skill-menu-item').forEach(function (item) {
+      item.onclick = function (e) {
+        e.stopPropagation();
+        toggleSkillFilter(item.dataset.slug);
+      };
+    });
+  }
+
+  toggleBtn.onclick = function (e) {
+    e.stopPropagation();
+    const isOpen = !menu.hidden;
+    if (isOpen) {
+      menu.hidden = true;
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    } else {
+      menu.hidden = false;
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      renderFeedSkills();
+      searchInput.focus();
+    }
+  };
+
+  searchInput.oninput = function () {
+    renderFeedSkills();
+  };
+
+  // Close when clicking outside
+  document.addEventListener('click', function (e) {
+    if (!toggleBtn.contains(e.target) && !menu.contains(e.target)) {
+      if (!menu.hidden) {
+        menu.hidden = true;
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      }
+    }
+  });
+}
+
 function toggleSkillFilter(slug) {
   if (slug === '') {
     feedFilters.skills = []; // "All" clears every skill filter
@@ -118,8 +218,11 @@ function toggleSkillFilter(slug) {
   feedFilters.page = 1;
 
   drawFilters();
-  // Redrawing removed the button the user clicked, so put keyboard focus back on it
-  document.querySelector(`.filter-chip[data-skill="${slug}"]`).focus();
+  // Put keyboard focus back if the chip exists
+  const clickedBtn = document.querySelector(`.filter-chip[data-skill="${slug}"]`);
+  if (clickedBtn) {
+    clickedBtn.focus();
+  }
   loadProjects();
 }
 
