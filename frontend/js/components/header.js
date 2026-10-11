@@ -119,8 +119,11 @@ async function logOut() {
   try {
     await callApi('POST', '/auth/logout', {});
   } catch (error) {
-    showToast(error.message, 'error');
-    return;
+    // 401 means the server already forgot our login, so we're logged out anyway
+    if (error.status !== 401) {
+      showToast(error.message, 'error');
+      return;
+    }
   }
   currentUser = null;
   drawHeader();
