@@ -2,17 +2,7 @@
 // This file runs last (see the <script> tags at the bottom of index.html).
 
 async function startApp() {
-  // 1. Use demo data only if the address has ?mock in it
-  await checkBackend();
-  if (useDemoData) {
-    document.getElementById('banner').innerHTML = `
-      <div class="demo-banner" role="note">
-        Demo mode: using sample data stored in your browser.
-        Log in with demo@devmatch.dev / demo1234.
-      </div>`;
-  }
-
-  // 2. Load the list of skills and fill the suggestion list used by every skill picker
+  // 1. Load the list of skills and fill the suggestion list used by every skill picker
   try {
     allSkills = await callApi('GET', '/skills');
   } catch (error) {
