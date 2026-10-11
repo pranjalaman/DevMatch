@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.schemas.user import UserResponse
+
 
 class SignupData(BaseModel):
     name: str = Field(min_length=1, max_length=80)
@@ -19,26 +21,5 @@ class LoginData(BaseModel):
     password: str
 
 
-class SkillsData(BaseModel):
-    skills: list[str] = Field(max_length=30)
-
-
-class UserResponse(BaseModel):
-    id: int
-    name: str
-    email: EmailStr
-    branch: str
-    year: int
-    github_url: str | None = None
-
-
 class AuthResponse(BaseModel):
     user: UserResponse
-
-
-class ProfileResponse(UserResponse):
-    skills: list[str]
-
-
-class SkillsResponse(BaseModel):
-    skills: list[str]

@@ -122,7 +122,7 @@ GitHub REST API (repo metadata)
 | Decision | Choice | Rationale |
 |---|---|---|
 | Backend framework | **FastAPI** (run with `uvicorn`) | Backend owner's choice (Balmukund); abstract lists Flask/FastAPI. Gives Pydantic validation and Swagger `/docs` for free |
-| Validation | Pydantic models in `schemas.py` | Replaces hand-written validators; custom exception handlers reshape errors to §8.1 |
+| Validation | Pydantic models in `app/schemas/` | Separate auth, profile, and shared user models; custom exception handlers reshape errors to §8.1 |
 | Sync vs async | Plain `def` endpoints + sync `psycopg` | FastAPI runs `def` routes in a threadpool, so no `async` complexity and no async DB driver needed |
 | Frontend | Vanilla JS + CSS, no build step | Zero tooling risk; matches abstract |
 | Serving | FastAPI mounts `StaticFiles` for `/static` and serves `index.html` at `/` | Single deploy, same origin, no CORS. Register `/api` routes before the static mount |
@@ -402,7 +402,7 @@ devmatch/
 │  ├─ deps.py            # dependencies: get_db, current_user, require_owner
 │  ├─ security.py        # password hashing
 │  ├─ routers/           # auth.py, projects.py, skills.py, me.py
-│  ├─ schemas.py         # Pydantic request/response models (§8.5 limits live here)
+│  ├─ schemas/           # Pydantic models: auth.py, profile.py, user.py (§8.5 limits live here)
 │  ├─ matcher.py         # pure functions (§7)
 │  └─ github_client.py
 ├─ migrations/           # 001_init.sql, 002_seed_skills.sql

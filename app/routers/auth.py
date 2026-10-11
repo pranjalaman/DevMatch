@@ -1,6 +1,6 @@
 import psycopg
 from app.database.db import get_db
-from app.schemas import AuthResponse, LoginData, SignupData
+from app.schemas.auth import AuthResponse, LoginData, SignupData
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pwdlib import PasswordHash
 

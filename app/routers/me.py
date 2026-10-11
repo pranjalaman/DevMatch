@@ -1,5 +1,5 @@
 from app.database.db import get_db
-from app.schemas import ProfileResponse, SkillsData, SkillsResponse
+from app.schemas.profile import ProfileResponse, SkillsData, SkillsResponse
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 router = APIRouter(prefix="/api", tags=["profile"])
