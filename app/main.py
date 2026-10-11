@@ -1,6 +1,7 @@
 import os
 
 from app.routers.auth import router as auth_router
+from app.routers.me import router as me_router
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -11,8 +12,6 @@ load_dotenv()
 
 app_env = os.getenv("APP_ENV", "development")
 secret_key = os.getenv("SECRET_KEY")
-if app_env == "production" and not secret_key:
-    raise RuntimeError("Set SECRET_KEY before running in production")
 
 app = FastAPI()
 app.add_middleware(
@@ -58,7 +57,10 @@ async def validation_error_handler(request: Request, error: RequestValidationErr
     )
 
 
+
+
 app.include_router(auth_router)
+app.include_router(me_router)
 
 @app.get("/")
 async def health_check():
