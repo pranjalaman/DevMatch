@@ -53,7 +53,6 @@ class ProjectCreate(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     summary: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=4000)
-    skills: list[str] = Field(min_length=1, max_length=15)
     contact_email: EmailStr
     contact_url: str | None = None
     repo_url: str | None = None
@@ -63,11 +62,6 @@ class ProjectCreate(BaseModel):
     @classmethod
     def strip_required_fields(cls, value):
         return clean_required_text(value) if isinstance(value, str) else value
-
-    @field_validator("skills")
-    @classmethod
-    def remove_duplicate_skills(cls, skills):
-        return list(dict.fromkeys(skill.strip() for skill in skills))
 
     @field_validator("contact_url")
     @classmethod
@@ -86,7 +80,6 @@ class ProjectUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=80)
     summary: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, min_length=1, max_length=4000)
-    skills: list[str] | None = Field(default=None, min_length=1, max_length=15)
     contact_email: EmailStr | None = None
     contact_url: str | None = None
     repo_url: str | None = None
@@ -99,13 +92,6 @@ class ProjectUpdate(BaseModel):
         if value is None:
             raise ValueError("This field cannot be null")
         return clean_required_text(value) if isinstance(value, str) else value
-
-    @field_validator("skills")
-    @classmethod
-    def remove_duplicate_skills(cls, skills):
-        if skills is None:
-            raise ValueError("This field cannot be null")
-        return list(dict.fromkeys(skill.strip() for skill in skills))
 
     @field_validator("contact_email", "status", "roles", mode="before")
     @classmethod

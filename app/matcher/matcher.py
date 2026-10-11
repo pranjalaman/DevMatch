@@ -1,5 +1,29 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TypedDict
+
+
+class Role(TypedDict):
+    title: str
+    skills: list[str]
+    filled: bool
+
+
+class Student(TypedDict):
+    id: int
+    name: str
+    branch: str
+    year: int
+    skills: list[str]
+
+
+class SuggestedMember(TypedDict):
+    id: int
+    name: str
+    branch: str
+    year: int
+    matched_skills: list[str]
+    score: int
 
 
 @dataclass(frozen=True)
@@ -13,7 +37,7 @@ class MatchResult:
 def calculate_match(
     user_skills: Iterable[str],
     project_skills: Iterable[str],
-    roles: Iterable[dict],
+    roles: Iterable[Role],
 ) -> MatchResult:
     user_set = set(user_skills)
     project_set = set(project_skills)
@@ -42,14 +66,14 @@ def calculate_match(
 def suggest_members(
     owner_id: int,
     role_skills: Iterable[str],
-    students: Iterable[dict],
+    students: Iterable[Student],
     limit: int = 5,
-) -> list[dict]:
+) -> list[SuggestedMember]:
     required = set(role_skills)
     if not required:
         return []
 
-    suggestions = []
+    suggestions: list[SuggestedMember] = []
     for student in students:
         if student["id"] == owner_id:
             continue
@@ -70,21 +94,3 @@ def suggest_members(
     suggestions.sort(key=lambda student: (-student["score"], student["name"].casefold()))
     return suggestions[:limit]
 
-
-SKILL_ALIASES = {
-    "js": "javascript",
-    "py": "python",
-    "reactjs": "react",
-    "react.js": "react",
-    "node": "nodejs",
-    "node.js": "nodejs",
-    "postgres": "postgresql",
-    "ml": "machine-learning",
-    "cpp": "c++",
-    "ts": "typescript",
-}
-
-
-def normalize_skill(value: str) -> str:
-    normalized = " ".join(value.lower().split())
-    return SKILL_ALIASES.get(normalized, normalized)

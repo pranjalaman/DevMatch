@@ -1,7 +1,6 @@
 from difflib import get_close_matches
 
 from app.database.db import get_db
-from app.matcher import normalize_skill
 from app.rate_limit import enforce_write_limit
 from app.schemas.profile import ProfileResponse, SkillsData, SkillsResponse
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -73,9 +72,8 @@ def replace_my_skills(
 
     skills = []
     for skill in data.skills:
-        normalized = normalize_skill(skill)
-        if normalized and normalized not in skills:
-            skills.append(normalized)
+        if skill not in skills:
+            skills.append(skill)
 
     if skills:
         found = connection.execute(

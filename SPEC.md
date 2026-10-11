@@ -70,11 +70,11 @@ Priority: **P0** = must ship for demo, **P1** = should ship, **P2** = stretch.
 
 **US-1 (Seeker, F1/F2)** — As a student, I sign up and add my skills so I get relevant recommendations.
 - AC: Signup requires name, email, password, branch, year. Duplicate email → `409`.
-- AC: I can add/remove skills from a canonical list; free-text skills are normalized (§7.1).
+- AC: I can add/remove skills from a canonical list; the frontend resolves labels and aliases to canonical lowercase slugs before submission, and the API validates those slugs against the database.
 - AC: After saving skills, the home feed reorders by match score without a page reload.
 
 **US-2 (Seeker, F4)** — As a student, I browse project cards at a glance.
-- AC: Each card shows title, 1–2 line summary, tech tags, count of open roles, and lead name.
+- AC: Each card shows title, 1–2 line summary, the union of required role skills as tech tags, count of open roles, and lead name.
 - AC: Search by text (title/summary) and filter by one or more skills and status (open/closed).
 - AC: Empty state is shown when there are no results, with a clear-filters action.
 
@@ -84,7 +84,7 @@ Priority: **P0** = must ship for demo, **P1** = should ship, **P2** = stretch.
 - AC: Contact details are visible only to logged-in users.
 
 **US-4 (Lead, F3)** — As a lead, I post a project.
-- AC: Required fields: title (≤80 chars), summary (≤200), description (≤4000), ≥1 tech tag, contact email. Optional: repo URL, contact URL, roles.
+- AC: Required fields: title (≤80 chars), summary (≤200), description (≤4000), contact email. Optional: repo URL, contact URL, roles. Each role has required skills; project tech tags are derived from the distinct skills across its roles.
 - AC: I can edit, close, or delete only my own projects (`403` otherwise).
 - AC: Invalid input returns field-level errors shown inline in the form.
 
@@ -110,7 +110,7 @@ Browser (HTML/CSS/vanilla JS, served as static files by FastAPI)
 FastAPI app on Render ──► PostgreSQL on NeonDB
    ├─ auth (session cookie)
    ├─ projects / roles / skills API
-   ├─ matcher.py (pure functions, no I/O)
+   ├─ matcher/matcher.py (pure functions, no I/O)
    └─ github_client.py (fail-soft, cached)
         │
         ▼
@@ -129,7 +129,7 @@ GitHub REST API (repo metadata)
 | Auth | Email + password hashed with Argon2 (`pwdlib[argon2]`); Starlette `SessionMiddleware` signed session cookie | Fastest secure option; OAuth is P2 |
 | API docs | Auto-generated at `/docs` | Free endpoint testing for the frontend dev; disable in production if desired |
 | DB access | `psycopg` (v3) with parameterized SQL | No ORM overhead; every query reviewable |
-| Matching | Pure Python functions in `matcher.py` | Unit-testable, explainable, no model dependency |
+| Matching | Pure Python functions in `app/matcher/matcher.py` | Unit-testable, explainable, no model dependency |
 | Database provisioning | Existing pre-provisioned PostgreSQL database | Schema, canonical skills, and demo data are managed outside this repository |
 
 ---
@@ -211,18 +211,16 @@ Requires `CREATE EXTENSION IF NOT EXISTS citext;`.
 
 ---
 
-## 7. Matching Engine (`matcher.py`)
+## 7. Matching Engine (`app/matcher/matcher.py`)
 
 Pure functions. No database or network calls inside. Inputs are plain sets.
 
-### 7.1 Skill normalization
-1. Lowercase, trim, collapse whitespace.
-2. Apply alias map (examples): `js`→`javascript`, `py`→`python`, `reactjs`→`react`, `node`→`nodejs`, `postgres`→`postgresql`, `ml`→`machine-learning`, `cpp`→`c++`.
-3. If the result exists in `skills.slug`, use it. Otherwise it is rejected with a `422` and suggestions (v1 does not allow arbitrary new skills; seed a generous list of ~80).
+### 7.1 Canonical skill selection
+The frontend resolves the user's typed label or supported alias to an existing canonical lowercase slug before submitting it. The API validates submitted slugs against `skills.slug` and rejects unknown values with a `422` and suggestions. The API does not normalize arbitrary free text or create new skills.
 
 ### 7.2 Scoring
 
-Given user skill set `U`, project stack set `S`, and open (unfilled) roles `R₁…Rₙ` each with required set `Rᵢ.skills`:
+Given user skill set `U`, project skill set `S` (the union of required skills across all project roles), and open (unfilled) roles `R₁…Rₙ` each with required set `Rᵢ.skills`:
 
 ```
 stack_coverage = |U ∩ S| / |S|                       (0 if S empty)
@@ -273,7 +271,7 @@ Base path `/api`. JSON in/out. Auth via session cookie. All write endpoints requ
 | GET | `/skills` | no | Canonical skill list (for pickers) |
 | GET | `/projects` | optional | List/search/filter (see below) |
 | GET | `/projects/{id}` | optional | Full detail (contact fields only if logged in) |
-| POST | `/projects` | yes | Create (with `skills[]` and `roles[]`) |
+| POST | `/projects` | yes | Create (with optional `roles[]`; project skill tags derive from role skills) |
 | PATCH | `/projects/{id}` | owner | Update fields, status |
 | DELETE | `/projects/{id}` | owner | Delete |
 | PATCH | `/projects/{id}/roles/{roleId}` | owner | `{ "filled": true }` |
@@ -303,12 +301,15 @@ Response:
 }
 ```
 `match` is `null` when logged out or user has no skills.
+The response's `skills` list is the sorted union of role-required skills across
+the project. Projects without roles have no derived skill tags and receive no
+stack-coverage contribution.
 
 ### 8.4 `GET /projects/{id}` additions
 Adds `description`, `roles[{id,title,skills[],filled}]`, `repo_url`, `repo_meta`, `created_at`. Adds `contact_email` and `contact_url` **only if authenticated**.
 
 ### 8.5 Validation limits
-Title ≤80, summary ≤200, description ≤4000, role title ≤60, ≤10 roles per project, ≤15 skills per project, ≤30 per user, password ≥8 chars. `repo_url` must match `^https://github\.com/[\w.-]+/[\w.-]+/?$`.
+Title ≤80, summary ≤200, description ≤4000, role title ≤60, ≤10 roles per project, ≤15 distinct required skills across a project's roles, ≤30 skills per user, password ≥8 chars. Role skill values must be canonical slugs present in the `skills` table. `repo_url` must match `^https://github\.com/[\w.-]+/[\w.-]+/?$`.
 
 ---
 
@@ -345,7 +346,7 @@ Single page, hash-routed. No framework, no build step.
 | `#/login`, `#/signup` | Auth forms | |
 
 ### 10.3 Components
-- **ProjectCard:** title, summary (2-line clamp), tech chips (max 4 + "+N"), open-role count, match badge (if present), lead name.
+- **ProjectCard:** title, summary (2-line clamp), tech chips derived from role skills (max 4 + "+N"), open-role count, match badge (if present), lead name.
 - **ProjectModal:** sections — overview, stack, open roles (each with required skill chips), contact (`Contact lead`, `View repo`), repo stats if available.
 - **SkillPicker:** type-ahead over `/skills`, multi-select chips.
 - **Toast:** non-blocking success/error messages.
@@ -403,7 +404,9 @@ devmatch/
 │  ├─ security.py        # password hashing
 │  ├─ routers/           # auth.py, projects.py, skills.py, me.py
 │  ├─ schemas/           # Pydantic models: auth.py, profile.py, user.py (§8.5 limits live here)
-│  ├─ matcher.py         # pure functions (§7)
+│  ├─ matcher/
+│  │  ├─ __init__.py  # public matcher exports
+│  │  └─ matcher.py   # pure functions (§7)
 │  └─ github_client.py
 ├─ frontend/             # static HTML/CSS/JavaScript app
 └─ render.yaml           # Render web-service configuration
