@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevMatch — Find teammates for your campus project</title>
+  <meta name="description" content="DevMatch is a campus project marketplace for BIT Sindri. Find the right teammates for your project, regardless of branch or batch.">
+  <meta name="theme-color" content="#f5f3ee">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M12 11l-5 5 5 5M20 11l5 5-5 5' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <a class="skip-link" href="#main" id="skip-link">Skip to content</a>
+
+  <header class="site-header" id="header"></header>
+  <div id="banner"></div>
+
+  <main id="main" class="container" tabindex="-1"></main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>DevMatch · Find the right teammates, regardless of branch or batch.</span>
+      <span>Hacktoberfest Hack Day Dhanbad · BIT Sindri</span>
+    </div>
+  </footer>
+
+  <div class="toast-region" id="toast-region"></div>
+
+  <!-- Suggestions for every skill box (filled in by script.js) -->
+  <datalist id="skill-options"></datalist>
+
+  <noscript>
+    <p class="container">DevMatch needs JavaScript enabled to run.</p>
+  </noscript>
+
+  <!-- The order matters: later files use functions from earlier files. script.js starts the app. -->
+  <script src="js/state.js"></script>
+  <script src="js/helpers.js"></script>
+  <script src="js/mock.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/components/toast.js"></script>
+  <script src="js/components/card.js"></script>
+  <script src="js/components/skillPicker.js"></script>
+  <script src="js/components/modal.js"></script>
+  <script src="js/components/header.js"></script>
+  <script src="js/views/feed.js"></script>
+  <script src="js/views/newProject.js"></script>
+  <script src="js/views/profile.js"></script>
+  <script src="js/views/auth.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/script.js"></script>
+</body>
+</html>
