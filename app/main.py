@@ -11,8 +11,6 @@ load_dotenv()
 
 app_env = os.getenv("APP_ENV", "development")
 secret_key = os.getenv("SECRET_KEY")
-if app_env == "production" and not secret_key:
-    raise RuntimeError("Set SECRET_KEY before running in production")
 
 app = FastAPI()
 app.add_middleware(
@@ -56,6 +54,8 @@ async def validation_error_handler(request: Request, error: RequestValidationErr
             }
         },
     )
+
+
 
 
 app.include_router(auth_router)

@@ -373,7 +373,7 @@ Loading (skeleton cards) · Empty (message + action) · Error (message + retry) 
 | **Rate limiting** | Auth endpoints: 10/min/IP. Writes: 60/min/user. (`slowapi`, in-memory is fine for v1.) |
 | **Reliability** | `/api/health` endpoint. GitHub and any LLM calls are fail-soft. |
 | **Observability** | Structured request logs (method, path, status, duration). No PII in logs. |
-| **Config** | All secrets via environment variables. `.env.example` committed; `.env` git-ignored. |
+| **Config** | All secrets via environment variables. `.env` committed; `.env` git-ignored. |
 
 ---
 
@@ -394,7 +394,7 @@ Loading (skeleton cards) · Empty (message + action) · Error (message + retry) 
 devmatch/
 ├─ SPEC.md
 ├─ README.md
-├─ .env.example
+├─ .env
 ├─ requirements.txt
 ├─ app/
 │  ├─ main.py            # FastAPI app, middleware, exception handlers, static mount
@@ -488,7 +488,7 @@ A feature is done when:
 - [ ] Inputs are validated server-side with the error shape in §8.1.
 - [ ] Loading, empty, and error states exist in the UI.
 - [ ] Tests listed in §14 for that feature pass.
-- [ ] No secrets in the repo; `.env.example` updated if config changed.
+- [ ] No secrets in the repo; `.env` updated if config changed.
 - [ ] Deployed and verified on the live URL.
 - [ ] SPEC.md updated if behavior differs from what is written here.
 
