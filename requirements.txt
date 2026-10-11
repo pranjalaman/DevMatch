@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+pwdlib[argon2]
+email-validator
+python-dotenv
+itsdangerous
