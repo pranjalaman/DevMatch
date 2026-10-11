@@ -1,32 +1,14 @@
 import psycopg
 from app.database.db import get_db
+from app.schemas import AuthResponse, LoginData, SignupData
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field, field_validator
 from pwdlib import PasswordHash
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 password_hash = PasswordHash.recommended()
 
 
-class SignupData(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    email: EmailStr
-    password: str = Field(min_length=8)
-    branch: str = Field(min_length=1)
-    year: int = Field(ge=1, le=5)
-
-    @field_validator("name", "branch", mode="before")
-    @classmethod
-    def strip_required_text(cls, value):
-        return value.strip() if isinstance(value, str) else value
-
-
-class LoginData(BaseModel):
-    email: EmailStr
-    password: str
-
-
-@router.post("/signup", status_code=201)
+@router.post("/signup", status_code=201, response_model=AuthResponse)
 def signup(data: SignupData, request: Request, connection=Depends(get_db)):
     try:
         user = connection.execute(
@@ -52,7 +34,7 @@ def signup(data: SignupData, request: Request, connection=Depends(get_db)):
     return {"user": user}
 
 
-@router.post("/login")
+@router.post("/login", response_model=AuthResponse)
 def login(data: LoginData, request: Request, connection=Depends(get_db)):
     try:
         user = connection.execute(
