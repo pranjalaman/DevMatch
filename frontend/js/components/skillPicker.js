@@ -36,13 +36,13 @@ function createSkillPicker(box, inputId, startingSkills, maxSkills, placeholder)
           <div class="picker-search-wrap">
             <span class="picker-search-icon">${icon('search', 14)}</span>
             <input type="text" id="${inputId}" class="picker-search-input"
-              placeholder="Search skills… (e.g. Python, React)" autocomplete="off" aria-label="Search skills">
+              placeholder="Type at least 3 letters to search skills…" autocomplete="off" aria-label="Search skills">
             <button type="button" class="picker-search-clear" aria-label="Clear search" title="Clear search" hidden>
               ${icon('x', 12)}
             </button>
           </div>
           <div class="picker-dropdown-meta">
-            <span class="picker-dropdown-count">Loading skills…</span>
+            <span class="picker-dropdown-count">Type at least 3 letters to search</span>
             <button type="button" class="picker-dropdown-close" aria-label="Close dropdown">Done</button>
           </div>
         </div>
@@ -128,7 +128,7 @@ function createSkillPicker(box, inputId, startingSkills, maxSkills, placeholder)
     const q = query.trim().toLowerCase();
     // Only search/filter if query is at least 3 characters
     if (!q || q.length < 3) {
-      return catalog;
+      return [];
     }
     const shortcut = typeof SKILL_SHORTCUTS !== 'undefined' && SKILL_SHORTCUTS[q] ? SKILL_SHORTCUTS[q] : null;
     return catalog.filter(function (skill) {
@@ -143,23 +143,26 @@ function createSkillPicker(box, inputId, startingSkills, maxSkills, placeholder)
     const query = searchInput.value;
     const trimmed = query.trim();
 
-    // Validator: if user entered 1 or 2 characters, display validator prompt
-    if (trimmed.length > 0 && trimmed.length < 3) {
-      clearBtn.hidden = false;
-      dropdownCount.innerHTML = `<span class="picker-validator-hint">Type at least 3 characters to filter (${trimmed.length}/3)</span>`;
-      optionsList.innerHTML = `<li class="picker-empty picker-validator-hint">Please enter at least 3 characters to search skills.</li>`;
+    // 1. If user has NOT typed anything, do NOT show any skills
+    if (!trimmed) {
+      clearBtn.hidden = true;
+      dropdownCount.textContent = 'Type at least 3 letters to search skills';
+      optionsList.innerHTML = `<li class="picker-empty picker-prompt">Type at least 3 letters to search skills (e.g. Python, React, Docker)…</li>`;
       return;
     }
 
-    const filtered = filterCatalog(catalog, query);
-
-    if (trimmed.length >= 3) {
+    // 2. If user entered 1 or 2 characters, display validator prompt and do NOT show skills
+    if (trimmed.length < 3) {
       clearBtn.hidden = false;
-      dropdownCount.textContent = `${filtered.length} match${filtered.length === 1 ? '' : 'es'} found for "${trimmed}"`;
-    } else {
-      clearBtn.hidden = true;
-      dropdownCount.textContent = `${catalog.length} skills available (click to toggle)`;
+      dropdownCount.innerHTML = `<span class="picker-validator-hint">Type at least 3 letters to search (${trimmed.length}/3)</span>`;
+      optionsList.innerHTML = `<li class="picker-empty picker-validator-hint">Please enter at least 3 letters to search skills.</li>`;
+      return;
     }
+
+    // 3. User entered at least 3 characters -> show matching skills
+    clearBtn.hidden = false;
+    const filtered = filterCatalog(catalog, query);
+    dropdownCount.textContent = `${filtered.length} match${filtered.length === 1 ? '' : 'es'} found for "${trimmed}"`;
 
     if (filtered.length === 0) {
       optionsList.innerHTML = `<li class="picker-empty">No skills match "<strong>${escapeHtml(trimmed)}</strong>"</li>`;

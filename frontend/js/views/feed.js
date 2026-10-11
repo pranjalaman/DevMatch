@@ -75,7 +75,7 @@ function drawFilters() {
       <div class="feed-skill-menu" id="feed-skill-menu" hidden>
         <div class="feed-skill-search-box">
           <input type="text" class="feed-skill-search-input" id="feed-skill-search-input"
-            placeholder="Search skills to filter…" autocomplete="off">
+            placeholder="Type at least 3 letters to search skills…" autocomplete="off">
         </div>
         <ul class="feed-skill-menu-list" id="feed-skill-menu-list"></ul>
       </div>
@@ -144,14 +144,20 @@ function setupFeedSkillDropdown() {
     const query = searchInput.value.trim().toLowerCase();
     const skills = Array.isArray(allSkills) && allSkills.length > 0 ? allSkills : [];
 
+    // Do not show skills if user has not typed anything
+    if (!query) {
+      list.innerHTML = `<li class="feed-skill-menu-empty">Type at least 3 letters to search skills…</li>`;
+      return;
+    }
+
     // Validator: only search if at least 3 characters entered
-    if (query.length > 0 && query.length < 3) {
-      list.innerHTML = `<li class="feed-skill-menu-empty">Enter at least 3 characters to filter (${query.length}/3)</li>`;
+    if (query.length < 3) {
+      list.innerHTML = `<li class="feed-skill-menu-empty">Enter at least 3 letters to filter (${query.length}/3)</li>`;
       return;
     }
 
     const filtered = skills.filter(function (s) {
-      return !query || s.label.toLowerCase().includes(query) || s.slug.toLowerCase().includes(query);
+      return s.label.toLowerCase().includes(query) || s.slug.toLowerCase().includes(query);
     });
 
     if (filtered.length === 0) {
