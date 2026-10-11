@@ -3,7 +3,6 @@
 
 let formRoles = [];         // roles added so far, e.g. [{ title: 'Frontend dev', skills: ['react'] }]
 let editingRoleIndex = -1;  // which role is being edited right now (-1 = we're adding a new one)
-let stackPicker = null;     // skill picker for the project's tech stack
 let rolePicker = null;      // skill picker for the role being added
 
 async function showProjectForm(projectId) {
@@ -44,7 +43,7 @@ function drawProjectForm(project) {
   // For a new project, use empty values
   if (!isEditing) {
     project = {
-      title: '', summary: '', description: '', skills: [],
+      title: '', summary: '', description: '',
       contact_email: currentUser.email, contact_url: '', repo_url: '', roles: [],
     };
   }
@@ -78,8 +77,6 @@ function drawProjectForm(project) {
           `<textarea class="input" id="description" rows="6" maxlength="4000" placeholder="What are you building, why, and what's the plan?" aria-describedby="description-error">${escapeHtml(project.description)}</textarea>`,
           'Max 4000 characters.')}
 
-        ${fieldHtml('skills', 'Required tech stack', '<div id="stack-picker"></div>', 'Type a skill and press Enter. Up to 15.')}
-
         <div class="form-row">
           ${fieldHtml('contact_email', 'Contact email',
             `<div class="input-icon">${icon('mail', 16)}<input class="input" id="contact_email" type="email" placeholder="you@example.com" value="${escapeHtml(project.contact_email)}" aria-describedby="contact_email-error"></div>`,
@@ -111,7 +108,6 @@ function drawProjectForm(project) {
       </form>
     </section>`;
 
-  stackPicker = createSkillPicker(document.getElementById('stack-picker'), 'skills', project.skills, 15, 'Add tech stack… (e.g. React, Python)');
   rolePicker = createSkillPicker(document.getElementById('role-picker'), 'role_skills', [], 15, 'Skills for this role…');
 
   document.getElementById('add-role-button').onclick = saveRole;
@@ -203,6 +199,18 @@ function saveRole() {
     rolePicker.input.focus();
     return;
   }
+  const projectSkills = new Set();
+  formRoles.forEach(function (role, index) {
+    if (index !== editingRoleIndex) {
+      role.skills.forEach(function (skill) { projectSkills.add(skill); });
+    }
+  });
+  skills.forEach(function (skill) { projectSkills.add(skill); });
+  if (projectSkills.size > 15) {
+    showFieldError('roles', 'A project can use at most 15 distinct skills across its roles.');
+    rolePicker.input.focus();
+    return;
+  }
 
   if (editingRoleIndex === -1) {
     if (formRoles.length >= 10) {
@@ -233,7 +241,6 @@ async function submitProjectForm(project) {
     title: document.getElementById('title').value.trim(),
     summary: document.getElementById('summary').value.trim(),
     description: document.getElementById('description').value.trim(),
-    skills: stackPicker.skills,
     contact_email: document.getElementById('contact_email').value.trim(),
     contact_url: document.getElementById('contact_url').value.trim() || null,
     repo_url: document.getElementById('repo_url').value.trim() || null,
@@ -245,7 +252,6 @@ async function submitProjectForm(project) {
   if (data.title === '') { showFieldError('title', 'Title is required'); hasErrors = true; }
   if (data.summary === '') { showFieldError('summary', 'Summary is required'); hasErrors = true; }
   if (data.description === '') { showFieldError('description', 'Description is required'); hasErrors = true; }
-  if (data.skills.length === 0) { showFieldError('skills', 'Add at least one technology'); hasErrors = true; }
   if (!isValidEmail(data.contact_email)) { showFieldError('contact_email', 'Enter a valid email address'); hasErrors = true; }
   if (data.contact_url && !isWebLink(data.contact_url)) { showFieldError('contact_url', 'Enter a full link starting with https://'); hasErrors = true; }
   if (data.repo_url && !isGithubRepoLink(data.repo_url)) { showFieldError('repo_url', 'Must look like https://github.com/owner/repo'); hasErrors = true; }

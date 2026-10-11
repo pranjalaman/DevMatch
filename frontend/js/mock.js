@@ -273,17 +273,28 @@ function getDemoUser(data) {
 
 // ----- Matching (SPEC.md section 7.2) -----
 
+function projectSkillSet(project) {
+  const skills = new Set();
+  for (const role of project.roles) {
+    for (const skill of role.skills) {
+      skills.add(skill);
+    }
+  }
+  return Array.from(skills).sort();
+}
+
 function calculateMatch(userSkills, project) {
   if (userSkills.length === 0) {
     return null;
   }
 
   // Skills the user has that the project also uses
-  const matchedSkills = project.skills.filter(function (skill) { return userSkills.includes(skill); });
+  const skills = projectSkillSet(project);
+  const matchedSkills = skills.filter(function (skill) { return userSkills.includes(skill); });
 
   let stackCoverage = 0;
-  if (project.skills.length > 0) {
-    stackCoverage = matchedSkills.length / project.skills.length;
+  if (skills.length > 0) {
+    stackCoverage = matchedSkills.length / skills.length;
   }
 
   // Find the open role the user fits best
@@ -325,7 +336,7 @@ function projectForCard(data, project, user) {
     id: project.id,
     title: project.title,
     summary: project.summary,
-    skills: project.skills,
+    skills: projectSkillSet(project),
     open_roles: openRoles.length,
     status: project.status,
     owner: { id: owner.id, name: owner.name },
@@ -372,11 +383,6 @@ function checkProjectInput(body, isUpdate) {
     if (!body.description) errors.description = 'Description is required';
     else if (body.description.length > 4000) errors.description = 'Max 4000 characters';
   }
-  if (!isUpdate || body.skills !== undefined) {
-    if (!body.skills || body.skills.length === 0) errors.skills = 'Add at least one tech tag';
-    else if (body.skills.length > 15) errors.skills = 'Max 15 skills';
-    else if (!body.skills.every(isKnownSkill)) errors.skills = 'Unknown skill';
-  }
   if (!isUpdate || body.contact_email !== undefined) {
     if (!isValidEmail(body.contact_email || '')) errors.contact_email = 'Enter a valid email';
   }
@@ -388,9 +394,19 @@ function checkProjectInput(body, isUpdate) {
   }
   if (body.roles !== undefined) {
     if (body.roles.length > 10) errors.roles = 'Max 10 roles';
+    const requiredSkills = new Set();
     for (const role of body.roles) {
       if (!role.title || role.title.length > 60) errors.roles = 'Each role needs a title (max 60 characters)';
+      if (!Array.isArray(role.skills) || role.skills.length === 0) {
+        errors.roles = 'Each role needs at least one required skill';
+      } else {
+        for (const skill of role.skills) {
+          if (!isKnownSkill(skill)) errors.roles = 'Unknown role skill';
+          requiredSkills.add(skill);
+        }
+      }
     }
+    if (requiredSkills.size > 15) errors.roles = 'A project can use at most 15 distinct skills across its roles';
   }
   return errors;
 }
@@ -547,7 +563,7 @@ function demoListProjects(data, user, query) {
     const text = (project.title + ' ' + project.summary).toLowerCase();
     if (search && !text.includes(search)) continue;
 
-    const hasAllSkills = wantedSkills.every(function (skill) { return project.skills.includes(skill); });
+    const hasAllSkills = wantedSkills.every(function (skill) { return projectSkillSet(project).includes(skill); });
     if (!hasAllSkills) continue;
 
     results.push(projectForCard(data, project, user));
@@ -585,7 +601,7 @@ function demoCreateProject(data, user, body) {
     title: body.title,
     summary: body.summary,
     description: body.description,
-    skills: body.skills,
+    skills: [],
     contact_email: body.contact_email,
     contact_url: body.contact_url,
     repo_url: body.repo_url,
@@ -630,7 +646,7 @@ function demoProjectRoutes(data, user, method, parts, body) {
     if (Object.keys(errors).length > 0) {
       return replyError(422, 'Invalid input', errors);
     }
-    const simpleFields = ['title', 'summary', 'description', 'skills', 'status', 'contact_email', 'contact_url', 'repo_url'];
+    const simpleFields = ['title', 'summary', 'description', 'status', 'contact_email', 'contact_url', 'repo_url'];
     for (const field of simpleFields) {
       if (body[field] !== undefined) {
         project[field] = body[field];

@@ -22,19 +22,7 @@ def _project_extras(connection, project_ids: list[int]) -> tuple[dict, dict]:
     if not project_ids:
         return {}, {}
 
-    skills_by_project: dict[int, list[str]] = defaultdict(list)
-    for row in connection.execute(
-        """
-        SELECT ps.project_id, s.slug
-        FROM project_skills ps
-        JOIN skills s ON s.id = ps.skill_id
-        WHERE ps.project_id = ANY(%s)
-        ORDER BY s.slug
-        """,
-        (project_ids,),
-    ).fetchall():
-        skills_by_project[row["project_id"]].append(row["slug"])
-
+    skills_by_project: dict[int, set[str]] = defaultdict(set)
     roles_by_project: dict[int, list[dict[str, Any]]] = defaultdict(list)
     role_ids = []
     for row in connection.execute(
@@ -73,7 +61,14 @@ def _project_extras(connection, project_ids: list[int]) -> tuple[dict, dict]:
         ).fetchall():
             roles_by_id[row["role_id"]]["skills"].append(row["slug"])
 
-    return skills_by_project, roles_by_project
+    for project_id, roles in roles_by_project.items():
+        for role in roles:
+            skills_by_project[project_id].update(role["skills"])
+
+    return (
+        {project_id: sorted(skills) for project_id, skills in skills_by_project.items()},
+        roles_by_project,
+    )
 
 
 def _format_project(
@@ -137,14 +132,20 @@ def _get_user_skills(connection, user_id: int | None) -> set[str]:
     return {row["slug"] for row in rows}
 
 
-def _validate_project_skills(connection, data: ProjectCreate | ProjectUpdate):
+def _validate_role_skills(connection, data: ProjectCreate | ProjectUpdate):
     skills = []
-    if data.skills is not None:
-        skills.extend(data.skills)
     if data.roles is not None:
         for role in data.roles:
             skills.extend(role.skills)
     skills = list(dict.fromkeys(skills))
+    if len(skills) > 15:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Invalid input",
+                "fields": {"roles": "A project can use at most 15 distinct skills across its roles"},
+            },
+        )
     if not skills:
         return
 
@@ -170,24 +171,10 @@ def _validate_project_skills(connection, data: ProjectCreate | ProjectUpdate):
             detail={
                 "message": "Invalid input",
                 "fields": {
-                    "skills": f"Unknown skills: {', '.join(unknown)}{suggestion_text}"
+                    "roles": f"Unknown skills: {', '.join(unknown)}{suggestion_text}"
                 },
             },
         )
-
-
-def _replace_project_skills(connection, project_id: int, skills: list[str]):
-    connection.execute(
-        "DELETE FROM project_skills WHERE project_id = %s",
-        (project_id,),
-    )
-    connection.execute(
-        """
-        INSERT INTO project_skills (project_id, skill_id)
-        SELECT %s, id FROM skills WHERE slug = ANY(%s)
-        """,
-        (project_id, skills),
-    )
 
 
 def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput]):
@@ -314,12 +301,16 @@ def list_projects(
         where.append(
             """
             p.id IN (
-                SELECT ps.project_id
-                FROM project_skills ps
-                JOIN skills s ON s.id = ps.skill_id
-                WHERE s.slug = ANY(%s)
-                GROUP BY ps.project_id
-                HAVING COUNT(DISTINCT s.slug) = %s
+                SELECT project_id
+                FROM (
+                    SELECT r.project_id, s.slug
+                    FROM roles r
+                    JOIN role_skills rs ON rs.role_id = r.id
+                    JOIN skills s ON s.id = rs.skill_id
+                ) project_skills_union
+                WHERE slug = ANY(%s)
+                GROUP BY project_id
+                HAVING COUNT(DISTINCT slug) = %s
             )
             """
         )
@@ -394,7 +385,7 @@ def create_project(
     connection=Depends(get_db),
 ):
     user_id = require_write_user_id(request)
-    _validate_project_skills(connection, data)
+    _validate_role_skills(connection, data)
     project = connection.execute(
         """
         INSERT INTO projects (
@@ -415,7 +406,6 @@ def create_project(
         ),
     ).fetchone()
     project_id = project["id"]
-    _replace_project_skills(connection, project_id, data.skills)
     _replace_roles(connection, project_id, data.roles)
     if data.repo_url:
         _refresh_repo_metadata(connection, project_id, data.repo_url)
@@ -442,7 +432,7 @@ def update_project(
             status_code=422,
             detail={"message": "Invalid input", "fields": {"body": "No changes provided"}},
         )
-    _validate_project_skills(connection, data)
+    _validate_role_skills(connection, data)
 
     columns = {
         "title": "title",
@@ -468,8 +458,6 @@ def update_project(
             f"UPDATE projects SET {', '.join(assignments)}, updated_at = now() WHERE id = %s",
             sql_values,
         )
-    if "skills" in changes:
-        _replace_project_skills(connection, project_id, changes["skills"])
     if "roles" in changes:
         _replace_roles(connection, project_id, changes["roles"])
 
