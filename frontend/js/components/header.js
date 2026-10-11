@@ -153,7 +153,7 @@ function runSearch(text) {
 
 async function logOut() {
   try {
-    await callApi('POST', '/auth/logout', {});
+    await callApi('POST', '/auth/logout', {}, { silent: true });
   } catch (error) {
     // 401 means the server already forgot our login, so we're logged out anyway
     if (error.status !== 401) {

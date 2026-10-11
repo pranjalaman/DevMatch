@@ -16,7 +16,7 @@ async function startApp() {
 
   // 3. Is someone already logged in?
   try {
-    currentUser = await callApi('GET', '/me');
+    currentUser = await callApi('GET', '/me', undefined, { silent: true });
   } catch (error) {
     currentUser = null; // not logged in, that's fine
   }

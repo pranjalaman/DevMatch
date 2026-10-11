@@ -2,10 +2,9 @@
 
 // Sends a request and gives back the answer from the server.
 // Example: const project = await callApi('GET', '/projects/7');
-// If something goes wrong it throws an error that has:
-//   error.message - text to show the user
-//   error.status  - HTTP status code (401 = not logged in, 404 = not found, ...)
-//   error.fields  - problems with form fields, like { title: 'Max 80 characters' }
+// If something goes wrong:
+//   - Automatically displays any backend error as a toast notification with a copy button
+//   - Throws an error object with { message, status, fields, toastShown }
 async function callApi(method, path, body, requestOptions) {
   const options = {
     method: method,
@@ -26,7 +25,13 @@ async function callApi(method, path, body, requestOptions) {
     if (networkProblem.name === 'AbortError') {
       throw networkProblem;
     }
-    throw makeApiError(0, 'Network error. Check your connection and try again.', {});
+    const message = 'Network error. Check your connection and try again.';
+    const error = makeApiError(0, message, {});
+    if (!requestOptions || !requestOptions.silent) {
+      showToast(message, 'error');
+      error.toastShown = true;
+    }
+    throw error;
   }
 
   const status = response.status;
@@ -45,11 +50,32 @@ async function callApi(method, path, body, requestOptions) {
     if (data && data.error) {
       message = data.error.message || message;
       fields = data.error.fields || {};
+      // If validation error with field specifics, format a clear message
+      if (fields && Object.keys(fields).length > 0) {
+        const details = Object.entries(fields).map(function (pair) {
+          return pair[0] + ': ' + pair[1];
+        }).join(', ');
+        if (!data.error.message || data.error.message === 'Invalid input') {
+          message = 'Invalid input (' + details + ')';
+        }
+      }
+    } else if (data && data.detail) {
+      if (typeof data.detail === 'string') {
+        message = data.detail;
+      } else if (typeof data.detail === 'object') {
+        message = data.detail.message || JSON.stringify(data.detail);
+      }
     } else if (status === 404) {
       // FastAPI's own "Not Found" answer, e.g. the backend doesn't have this route yet
       message = 'Not found (the server doesn’t have this yet).';
     }
-    throw makeApiError(status, message, fields);
+
+    const error = makeApiError(status, message, fields);
+    if (!requestOptions || !requestOptions.silent) {
+      showToast(message, 'error');
+      error.toastShown = true;
+    }
+    throw error;
   }
 
   return data;

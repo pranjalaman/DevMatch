@@ -179,13 +179,23 @@ def _validate_role_skills(connection, data: ProjectCreate | ProjectUpdate):
         )
 
 
-def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput]):
+def _role_attr(role, name, default=None):
+    if isinstance(role, dict):
+        return role.get(name, default)
+    return getattr(role, name, default)
+
+
+def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput] | list[dict]):
     current_rows = connection.execute(
         "SELECT id FROM roles WHERE project_id = %s",
         (project_id,),
     ).fetchall()
     current_ids = {row["id"] for row in current_rows}
-    submitted_ids = {role.id for role in roles if role.id is not None}
+    submitted_ids = {
+        _role_attr(role, "id")
+        for role in roles
+        if _role_attr(role, "id") is not None
+    }
     if not submitted_ids.issubset(current_ids):
         raise HTTPException(
             status_code=422,
@@ -196,20 +206,24 @@ def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput]):
         )
 
     for role in roles:
-        if role.id is None:
+        role_id = _role_attr(role, "id")
+        role_title = _role_attr(role, "title")
+        role_filled = _role_attr(role, "filled", False)
+        role_skills = _role_attr(role, "skills", [])
+
+        if role_id is None:
             role_id = connection.execute(
                 """
                 INSERT INTO roles (project_id, title, filled)
                 VALUES (%s, %s, %s)
                 RETURNING id
                 """,
-                (project_id, role.title, role.filled),
+                (project_id, role_title, role_filled),
             ).fetchone()["id"]
         else:
-            role_id = role.id
             connection.execute(
                 "UPDATE roles SET title = %s, filled = %s WHERE id = %s",
-                (role.title, role.filled, role_id),
+                (role_title, role_filled, role_id),
             )
 
         connection.execute("DELETE FROM role_skills WHERE role_id = %s", (role_id,))
@@ -218,7 +232,7 @@ def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput]):
             INSERT INTO role_skills (role_id, skill_id)
             SELECT %s, id FROM skills WHERE slug = ANY(%s)
             """,
-            (role_id, role.skills),
+            (role_id, role_skills),
         )
 
     for removed_id in current_ids - submitted_ids:
@@ -461,7 +475,7 @@ def update_project(
             sql_values,
         )
     if "roles" in changes:
-        _replace_roles(connection, project_id, changes["roles"])
+        _replace_roles(connection, project_id, data.roles if data.roles is not None else changes["roles"])
 
     updated_project = _fetch_project(connection, project_id)
     if changes.get("repo_url", updated_project["repo_url"]) is None:
@@ -474,7 +488,7 @@ def update_project(
         resulting_repo_url = updated_project["repo_url"]
         cached = (
             project["repo_meta"]
-            if resulting_repo_url == project["repo_url"]
+            if resulting_repo_url == project["repo_url"] and isinstance(project.get("repo_meta"), dict)
             else None
         )
         _refresh_repo_metadata(

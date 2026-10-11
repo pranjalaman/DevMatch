@@ -1631,25 +1631,29 @@ textarea.input {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 200;
+  z-index: 500;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: min(380px, calc(100% - 40px));
+  max-width: min(420px, calc(100% - 32px));
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 12px 12px 14px;
+  padding: 12px 14px;
   border: var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
   font-size: 0.88rem;
   font-weight: 600;
-  animation: toast-in 0.2s var(--ease);
+  animation: toast-in 0.22s var(--ease);
+  word-break: break-word;
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
 
 .toast p {
@@ -1657,19 +1661,91 @@ textarea.input {
   padding-top: 1px;
 }
 
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-message {
+  margin: 0;
+  padding-top: 1px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
 .toast-success { background: var(--green); }
 .toast-error { background: var(--red); }
 .toast-info { background: var(--blue); }
 
+.toast-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-family: var(--font);
+  font-weight: 700;
+  background: var(--surface);
+  color: var(--ink);
+  border: var(--border-thin);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: transform 0.1s var(--ease), box-shadow 0.1s var(--ease), background 0.15s ease, color 0.15s ease;
+}
+
+.toast-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-sm);
+  background: #ffffff;
+}
+
+.toast-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.toast-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.toast-btn.is-copied {
+  background: var(--green);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
 .toast-close {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid transparent;
   border-radius: 50%;
   background: transparent;
+  color: var(--ink);
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .toast-close:hover {
@@ -1677,14 +1753,30 @@ textarea.input {
   color: #fff;
 }
 
+.toast-close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 .toast-out {
   opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.15s, transform 0.15s;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.toast-pulse {
+  animation: toast-shake 0.3s var(--ease);
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-shake {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.04) translateY(-2px); }
+  60% { transform: scale(0.98) translateY(1px); }
 }
 
 /* ---------- Footer ---------- */
