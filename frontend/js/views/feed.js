@@ -304,6 +304,18 @@ function drawProjects(answer) {
   // Nothing found
   if (answer.items.length === 0) {
     info.textContent = '';
+    if (feedResultState(answer.total, answer.items.length) === 'out-of-range') {
+      grid.innerHTML = messageBoxHtml('This page is out of range',
+        'There are ' + answer.total + ' matching projects, but not on this page.',
+        '<button class="btn btn-primary" type="button" id="back-to-first-page">Back to first page</button>',
+        false);
+      document.getElementById('back-to-first-page').onclick = function () {
+        feedFilters.page = 1;
+        loadProjects();
+      };
+      document.getElementById('feed-pages').hidden = true;
+      return;
+    }
     const hasFilters = feedFilters.search !== '' || feedFilters.skills.length > 0 || feedFilters.status !== 'open';
 
     if (hasFilters) {

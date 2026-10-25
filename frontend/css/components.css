@@ -38,7 +38,7 @@
 
 .btn-primary {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .btn-accent {
@@ -125,7 +125,7 @@
   height: 32px;
   border-radius: var(--radius-sm);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .search {
@@ -183,7 +183,7 @@
   height: 28px;
   border-radius: 50%;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -301,7 +301,7 @@ textarea.input {
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: var(--select-arrow);
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
@@ -438,7 +438,7 @@ textarea.input {
 
 .filter-chip[aria-pressed="true"] {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .count-badge {
@@ -544,7 +544,7 @@ textarea.input {
 
 .segmented button[aria-pressed="true"] {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .result-meta {
@@ -762,7 +762,7 @@ textarea.input {
 
 .page-btn[aria-current="page"] {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .page-btn[disabled] {
@@ -785,6 +785,10 @@ textarea.input {
   overflow-y: auto;
   background: rgba(17, 17, 17, 0.55);
   animation: fade-in 0.15s ease-out;
+}
+
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.7);
 }
 
 .modal {
@@ -1087,7 +1091,7 @@ textarea.input {
 
 .picker-chip button:hover {
   background: var(--ink);
-  color: #ffffff;
+  color: var(--on-ink);
 }
 
 .picker-trigger-wrap {
@@ -1218,7 +1222,7 @@ textarea.input {
 
 .picker-search-clear:hover {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .picker-dropdown-meta {
@@ -1244,7 +1248,7 @@ textarea.input {
 
 .picker-dropdown-close:hover {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .picker-options {
@@ -1305,7 +1309,7 @@ textarea.input {
 
 .picker-option.is-selected .picker-option-checkbox {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .picker-option-label {
@@ -1716,7 +1720,7 @@ textarea.input {
 .toast-btn:hover {
   transform: translate(-1px, -1px);
   box-shadow: var(--shadow-sm);
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .toast-btn:active {
@@ -1750,7 +1754,7 @@ textarea.input {
 
 .toast-close:hover {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .toast-close:focus-visible {

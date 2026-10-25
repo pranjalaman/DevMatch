@@ -1,10 +1,10 @@
 import os
 import json
 import logging
-import secrets
 import time
 from pathlib import Path
 
+from app.runtime import resolve_session_secret
 from app.routers.auth import router as auth_router
 from app.routers.me import router as me_router
 from app.routers.projects import router as projects_router
@@ -19,12 +19,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 load_dotenv()
 
-app_env = os.getenv("APP_ENV", "development")
-secret_key = os.getenv("SECRET_KEY")
-if app_env == "production" and not secret_key:
-    raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
-if not secret_key:
-    secret_key = secrets.token_urlsafe(32)
+raw_app_env = os.getenv("APP_ENV")
+app_env = raw_app_env or "development"
+secret_key = resolve_session_secret(raw_app_env, os.getenv("SECRET_KEY"))
 
 app = FastAPI(
     docs_url=None if app_env == "production" else "/docs",

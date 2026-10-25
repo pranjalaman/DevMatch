@@ -28,9 +28,10 @@ async function showProjectForm(projectId) {
     return;
   }
 
-  if (project.owner.id !== currentUser.id) {
-    showToast('You can only edit your own projects.', 'error');
-    goTo('/project/' + projectId);
+  if (!canEditProject(currentUser ? currentUser.id : null, project.owner.id)) {
+    mainArea.innerHTML = messageBoxHtml('You can’t edit this project',
+      'Only the project lead can change this listing.',
+      '<a class="btn btn-primary" href="#/">Back to feed</a>', false);
     return;
   }
 

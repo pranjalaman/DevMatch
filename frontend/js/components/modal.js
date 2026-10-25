@@ -72,17 +72,22 @@ async function loadProjectIntoModal() {
       return;
     }
     let title = 'Couldn’t load this project';
-    let buttons = '<button class="btn btn-primary" type="button" id="modal-retry">Try again</button>';
+    let body = messageBoxHtml(title, error.message,
+      '<button class="btn btn-primary" type="button" id="modal-retry">Try again</button><button class="btn" type="button" id="modal-back">Back to feed</button>',
+      true);
     if (error.status === 404) {
       title = 'Project not found';
-      buttons = '';
+      body = projectMissingHtml();
     }
     modal.innerHTML = closeButtonHtml() +
       `<h2 id="modal-title" class="sr-only">${title}</h2>` +
-      messageBoxHtml(title, error.message, buttons + '<button class="btn" type="button" id="modal-back">Back to feed</button>', true);
+      body;
 
     document.getElementById('modal-close').onclick = function () { goTo('/'); };
-    document.getElementById('modal-back').onclick = function () { goTo('/'); };
+    const backButton = document.getElementById('modal-back');
+    if (backButton) {
+      backButton.onclick = function () { goTo('/'); };
+    }
     const retryButton = document.getElementById('modal-retry');
     if (retryButton) {
       retryButton.onclick = loadProjectIntoModal;
@@ -145,16 +150,17 @@ function drawModal(project) {
     if (isOwner && project.repo_url) {
       refreshButton = `<button class="btn btn-sm" type="button" id="refresh-repo">${icon('refresh', 14)} Refresh</button>`;
     }
+    const stats = repoStatsSummary(project.repo_meta);
     let language = '';
-    if (project.repo_meta && project.repo_meta.language) {
-      language = `<span>${icon('code', 14)} ${escapeHtml(project.repo_meta.language)}</span>`;
+    if (stats.language) {
+      language = `<span>${icon('code', 14)} ${escapeHtml(stats.language)}</span>`;
     }
     let repoStats = '<span class="muted">Repository stats are unavailable.</span>';
-    if (project.repo_meta) {
-      const stars = `<span>${icon('star', 14)} ${project.repo_meta.stars} stars</span>`;
+    if (stats.state === 'ready') {
+      const stars = `<span>${icon('star', 14)} ${stats.stars} stars</span>`;
       let pushedAt = '';
-      if (project.repo_meta.pushed_at) {
-        pushedAt = `<span>${icon('clock', 14)} Last push ${formatDate(project.repo_meta.pushed_at)}</span>`;
+      if (stats.pushedAt) {
+        pushedAt = `<span>${icon('clock', 14)} Last push ${formatDate(stats.pushedAt)}</span>`;
       }
       repoStats = `${stars}${language}${pushedAt}`;
     }
@@ -219,16 +225,25 @@ function drawModal(project) {
   }
 
   // --- Contact and repo buttons at the bottom ---
-  let contactButton;
-  if (currentUser === null) {
+  let contactButton = '';
+  const contactKinds = contactActionKinds(
+    currentUser !== null,
+    project.contact_email,
+    project.contact_url
+  );
+  if (contactKinds.indexOf('login') !== -1) {
     contactButton = `<a class="btn btn-primary" href="#/login" id="login-to-contact">${icon('lock', 16)} Log in to contact</a>`;
-  } else if (project.contact_url && isWebLink(project.contact_url)) {
-    contactButton = `<a class="btn btn-primary" href="${escapeHtml(project.contact_url)}" target="_blank" rel="noopener noreferrer">${icon('link', 16)} Contact lead</a>`;
-  } else if (project.contact_email) {
-    const subject = encodeURIComponent('DevMatch: ' + project.title);
-    contactButton = `<a class="btn btn-primary" href="mailto:${escapeHtml(project.contact_email)}?subject=${subject}">${icon('mail', 16)} Contact lead</a>`;
   } else {
-    contactButton = '<button class="btn btn-primary" type="button" disabled>No contact info</button>';
+    if (contactKinds.indexOf('mailto') !== -1) {
+      const subject = encodeURIComponent('DevMatch: ' + project.title);
+      contactButton += `<a class="btn btn-primary" href="mailto:${escapeHtml(project.contact_email)}?subject=${subject}">${icon('mail', 16)} Email lead</a>`;
+    }
+    if (contactKinds.indexOf('url') !== -1) {
+      contactButton += `<a class="btn" href="${escapeHtml(project.contact_url)}" target="_blank" rel="noopener noreferrer">${icon('link', 16)} Open contact link<span class="sr-only"> (opens in a new tab)</span></a>`;
+    }
+    if (contactKinds.indexOf('none') !== -1) {
+      contactButton = '<button class="btn btn-primary" type="button" disabled>No contact info</button>';
+    }
   }
 
   let repoButton = '<button class="btn" type="button" disabled>No repo linked</button>';

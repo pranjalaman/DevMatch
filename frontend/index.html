@@ -6,6 +6,18 @@
   <title>DevMatch — Find teammates for your campus project</title>
   <meta name="description" content="DevMatch is a campus project marketplace for BIT Sindri. Find the right teammates for your project, regardless of branch or batch.">
   <meta name="theme-color" content="#f5f3ee">
+  <!-- Runs before the CSS loads so a dark-mode user never sees a white flash -->
+  <script>
+    (function () {
+      let theme = null;
+      try { theme = localStorage.getItem('devmatch-theme'); } catch (e) {}
+      if (theme !== 'light' && theme !== 'dark') {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#141414' : '#f5f3ee';
+    })();
+  </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M12 11l-5 5 5 5M20 11l5 5-5 5' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

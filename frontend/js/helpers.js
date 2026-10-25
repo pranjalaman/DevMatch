@@ -87,6 +87,58 @@ function isWebLink(url) {
   return lower.startsWith('https://') || lower.startsWith('http://');
 }
 
+function feedResultState(total, itemCount) {
+  if (itemCount > 0) {
+    return 'projects';
+  }
+  if (total > 0) {
+    return 'out-of-range';
+  }
+  return 'empty';
+}
+
+function contactActionKinds(isLoggedIn, contactEmail, contactUrl) {
+  if (!isLoggedIn) {
+    return ['login'];
+  }
+  const kinds = [];
+  if (contactEmail) {
+    kinds.push('mailto');
+  }
+  if (contactUrl && isWebLink(contactUrl)) {
+    kinds.push('url');
+  }
+  if (kinds.length === 0) {
+    kinds.push('none');
+  }
+  return kinds;
+}
+
+function canEditProject(userId, ownerId) {
+  return userId !== null && userId !== undefined && userId === ownerId;
+}
+
+function repoStatsSummary(repoMeta) {
+  if (!repoMeta) {
+    return { state: 'unavailable', stars: null, language: null, pushedAt: null };
+  }
+  return {
+    state: 'ready',
+    stars: repoMeta.stars,
+    language: repoMeta.language || null,
+    pushedAt: repoMeta.pushed_at || null,
+  };
+}
+
+function projectMissingHtml() {
+  return messageBoxHtml(
+    'Project not found',
+    'This project does not exist.',
+    '<a class="btn" href="#/">Back to feed</a>',
+    false
+  );
+}
+
 // Must look like https://github.com/owner/repo
 function isGithubRepoLink(url) {
   return /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url);
@@ -140,6 +192,8 @@ const ICONS = {
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
   lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
 };
 
 function icon(name, size) {
