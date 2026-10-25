@@ -1,13 +1,17 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.schemas.user import UserResponse
+
+BranchCode = Literal["CSE", "IT", "ECE", "EE", "ME", "CE", "CHE", "MIN", "MET", "PIE"]
 
 
 class SignupData(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     email: EmailStr
-    password: str = Field(min_length=8)
-    branch: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=128)
+    branch: BranchCode
     year: int = Field(ge=1, le=5)
 
     @field_validator("name", "branch", mode="before")

@@ -1,8 +1,11 @@
 :root {
+  color-scheme: light;
+
   --bg: #f5f3ee;
   --surface: #ffffff;
   --surface-alt: #ece9e1;
   --ink: #111111;
+  --on-ink: #ffffff;
   --ink-soft: #333333;
   --muted: #555555;
   --placeholder: #767676;
@@ -39,4 +42,33 @@
 
   --header-h: 64px;
   --ease: cubic-bezier(.2, .8, .2, 1);
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+/* Accent colours are deepened so light text on them stays readable. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #141414;
+  --surface: #1f1f1f;
+  --surface-alt: #2b2b2b;
+  --ink: #f2f0ea;
+  --on-ink: #141414;
+  --ink-soft: #d6d3cc;
+  --muted: #a9a59c;
+  --placeholder: #8a867e;
+  --focus: #7c9cff;
+  --danger: #ff7a85;
+
+  --yellow: #7a6312;
+  --yellow-soft: #3d3412;
+  --green: #1e5236;
+  --blue: #1d4466;
+  --pink: #5e2340;
+  --purple: #3f3470;
+  --orange: #6b3f14;
+  --red: #6e1f24;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23f2f0ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }

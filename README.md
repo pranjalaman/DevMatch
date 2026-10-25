@@ -28,7 +28,10 @@ DevMatch helps BIT Sindri students find projects that fit their skills—and hel
    ```env
    DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
    SECRET_KEY=use-a-long-random-secret
+   APP_ENV=development
    ```
+
+   A public deploy must set both `APP_ENV=production` and `SECRET_KEY`. The process will not start when `APP_ENV` is any value other than `development` and `SECRET_KEY` is missing.
 
 3. Install and run:
 

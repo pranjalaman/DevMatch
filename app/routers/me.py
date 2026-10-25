@@ -1,6 +1,7 @@
 from difflib import get_close_matches
 
 from app.database.db import get_db
+from app.skill_names import resolve_skill_list
 from app.rate_limit import enforce_write_limit
 from app.schemas.profile import ProfileResponse, SkillsData, SkillsResponse
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -70,41 +71,30 @@ def replace_my_skills(
         request.session.clear()
         raise HTTPException(status_code=401, detail="Please log in again")
 
-    skills = []
-    for skill in data.skills:
-        if skill not in skills:
-            skills.append(skill)
-
-    if skills:
-        found = connection.execute(
-            "SELECT slug FROM skills WHERE slug = ANY(%s)", (skills,)
-        ).fetchall()
-        found_skills = {row["slug"] for row in found}
-        unknown_skills = [skill for skill in skills if skill not in found_skills]
-        if unknown_skills:
-            all_skills = connection.execute("SELECT slug FROM skills").fetchall()
-            known_slugs = [row["slug"] for row in all_skills]
-            suggestions = []
-            for skill in unknown_skills:
-                close = get_close_matches(skill, known_slugs, n=3, cutoff=0.55)
-                suggestions.extend(close)
-            suggestion_text = (
-                f". Did you mean: {', '.join(dict.fromkeys(suggestions))}?"
-                if suggestions
-                else ""
-            )
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "message": "Invalid input",
-                    "fields": {
-                        "skills": (
-                            f"Unknown skills: {', '.join(unknown_skills)}"
-                            f"{suggestion_text}"
-                        )
-                    },
+    catalog = connection.execute("SELECT slug, label FROM skills").fetchall()
+    skills, unknown_skills = resolve_skill_list(list(data.skills), catalog)
+    if unknown_skills:
+        known_slugs = [row["slug"] for row in catalog]
+        suggestions = []
+        for skill in unknown_skills:
+            suggestions.extend(get_close_matches(skill, known_slugs, n=3, cutoff=0.55))
+        suggestion_text = (
+            f". Did you mean: {', '.join(dict.fromkeys(suggestions))}?"
+            if suggestions
+            else ""
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Invalid input",
+                "fields": {
+                    "skills": (
+                        f"Unknown skills: {', '.join(unknown_skills)}"
+                        f"{suggestion_text}"
+                    )
                 },
-            )
+            },
+        )
 
     connection.execute("DELETE FROM user_skills WHERE user_id = %s", (user_id,))
     for skill in skills:

@@ -1,21 +1,32 @@
 from collections import defaultdict
 from difflib import get_close_matches
+from fractions import Fraction
 from typing import Any
 
 from app.database.db import get_db
-from app.github_client import fetch_repo_metadata
-from app.matcher import calculate_match, suggest_members
+from app.github_client import decide_repo_meta, fetch_repo_metadata
+from app.matcher import build_suggestion_groups, visible_match
+from app.skill_names import resolve_skill_list
 from app.routers.me import require_user_id, require_write_user_id
 from app.schemas.project import (
     ProjectCreate,
     ProjectRoleInput,
     ProjectUpdate,
     RoleUpdate,
+    clean_project_filters,
+    resolve_role_replacement,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from psycopg.types.json import Jsonb
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+def _match_sort_key(item: dict) -> tuple:
+    match = item["match"] or {}
+    fit_size = item.get("_fit_size") or 0
+    fit = Fraction(item.get("_fit_overlap") or 0, fit_size) if fit_size else Fraction(0)
+    return (match.get("score", 0), fit, item["created_at"], item["id"])
 
 
 def _project_extras(connection, project_ids: list[int]) -> tuple[dict, dict]:
@@ -94,14 +105,16 @@ def _format_project(
     if not include_details:
         result["skills"] = skills
 
-    if user_id is not None and user_skills:
-        match = calculate_match(user_skills, skills, roles)
-        result["match"] = {
-            "score": match.score,
-            "matched_skills": match.matched_skills,
-            "best_role": match.best_role,
-            "role_fit": match.role_fit,
-        }
+    payload = visible_match(user_id, row["owner_id"], user_skills, roles)
+    if payload is None:
+        result["match"] = None
+    else:
+        result["_fit_overlap"] = payload.pop("fit_overlap")
+        result["_fit_size"] = payload.pop("fit_size")
+        result["match"] = payload
+        if include_details:
+            result.pop("_fit_overlap", None)
+            result.pop("_fit_size", None)
 
     if include_details:
         result.update(
@@ -134,13 +147,45 @@ def _get_user_skills(connection, user_id: int | None) -> set[str]:
     return {row["slug"] for row in rows}
 
 
+def _skill_catalog(connection):
+    return connection.execute("SELECT slug, label FROM skills").fetchall()
+
+
+def _unknown_skill_message(unknown: list[str], catalog) -> str:
+    known_slugs = [row["slug"] for row in catalog]
+    suggestions = []
+    for skill in unknown:
+        suggestions.extend(get_close_matches(skill, known_slugs, n=3, cutoff=0.55))
+    suggestion_text = (
+        f". Did you mean: {', '.join(dict.fromkeys(suggestions))}?"
+        if suggestions
+        else ""
+    )
+    return f"Unknown skills: {', '.join(unknown)}{suggestion_text}"
+
+
 def _validate_role_skills(connection, data: ProjectCreate | ProjectUpdate):
-    skills = []
-    if data.roles is not None:
-        for role in data.roles:
-            skills.extend(role.skills)
-    skills = list(dict.fromkeys(skills))
-    if len(skills) > 15:
+    if data.roles is None:
+        return
+    catalog = _skill_catalog(connection)
+    distinct = []
+    unknown = []
+    for role in data.roles:
+        resolved, missing = resolve_skill_list(list(role.skills), catalog)
+        unknown.extend(missing)
+        role.skills = resolved
+        for skill in resolved:
+            if skill not in distinct:
+                distinct.append(skill)
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Invalid input",
+                "fields": {"roles": _unknown_skill_message(unknown, catalog)},
+            },
+        )
+    if len(distinct) > 15:
         raise HTTPException(
             status_code=422,
             detail={
@@ -148,68 +193,26 @@ def _validate_role_skills(connection, data: ProjectCreate | ProjectUpdate):
                 "fields": {"roles": "A project can use at most 15 distinct skills across its roles"},
             },
         )
-    if not skills:
-        return
-
-    found = connection.execute(
-        "SELECT slug FROM skills WHERE slug = ANY(%s)",
-        (skills,),
-    ).fetchall()
-    known = {row["slug"] for row in found}
-    unknown = [skill for skill in skills if skill not in known]
-    if unknown:
-        all_skills = connection.execute("SELECT slug FROM skills").fetchall()
-        known_slugs = [row["slug"] for row in all_skills]
-        suggestions = []
-        for skill in unknown:
-            suggestions.extend(get_close_matches(skill, known_slugs, n=3, cutoff=0.55))
-        suggestion_text = (
-            f". Did you mean: {', '.join(dict.fromkeys(suggestions))}?"
-            if suggestions
-            else ""
-        )
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Invalid input",
-                "fields": {
-                    "roles": f"Unknown skills: {', '.join(unknown)}{suggestion_text}"
-                },
-            },
-        )
-
-
-def _role_attr(role, name, default=None):
-    if isinstance(role, dict):
-        return role.get(name, default)
-    return getattr(role, name, default)
 
 
 def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput] | list[dict]):
     current_rows = connection.execute(
-        "SELECT id FROM roles WHERE project_id = %s",
+        "SELECT id, filled FROM roles WHERE project_id = %s",
         (project_id,),
     ).fetchall()
-    current_ids = {row["id"] for row in current_rows}
-    submitted_ids = {
-        _role_attr(role, "id")
-        for role in roles
-        if _role_attr(role, "id") is not None
-    }
-    if not submitted_ids.issubset(current_ids):
+    try:
+        writes, removed_ids = resolve_role_replacement(current_rows, roles)
+    except ValueError as error:
         raise HTTPException(
             status_code=422,
-            detail={
-                "message": "Invalid input",
-                "fields": {"roles": "A role does not belong to this project"},
-            },
-        )
+            detail={"message": "Invalid input", "fields": {"roles": str(error)}},
+        ) from error
 
-    for role in roles:
-        role_id = _role_attr(role, "id")
-        role_title = _role_attr(role, "title")
-        role_filled = _role_attr(role, "filled", False)
-        role_skills = _role_attr(role, "skills", [])
+    for role in writes:
+        role_id = role["id"]
+        role_title = role["title"]
+        role_filled = role["filled"]
+        role_skills = role["skills"]
 
         if role_id is None:
             role_id = connection.execute(
@@ -235,7 +238,7 @@ def _replace_roles(connection, project_id: int, roles: list[ProjectRoleInput] | 
             (role_id, role_skills),
         )
 
-    for removed_id in current_ids - submitted_ids:
+    for removed_id in removed_ids:
         connection.execute("DELETE FROM roles WHERE id = %s", (removed_id,))
 
 
@@ -259,8 +262,24 @@ def _refresh_repo_metadata(
     repo_url: str | None,
     cached: dict | None = None,
     force: bool = False,
+    url_changed: bool = False,
+    url_removed: bool = False,
 ):
-    metadata = fetch_repo_metadata(repo_url, force=force, cached=cached)
+    previous = cached if isinstance(cached, dict) else None
+    if url_removed or not repo_url:
+        metadata = None
+    else:
+        fetch = fetch_repo_metadata(
+            repo_url,
+            force=force,
+            cached=None if url_changed else previous,
+        )
+        metadata = decide_repo_meta(
+            url_removed=False,
+            url_changed=url_changed,
+            fetch=fetch,
+            previous=None if url_changed else previous,
+        )
     connection.execute(
         "UPDATE projects SET repo_meta = %s WHERE id = %s",
         (Jsonb(metadata) if metadata is not None else None, project_id),
@@ -306,6 +325,14 @@ def list_projects(
     page_size: int = Query(default=12, ge=1, le=50),
     connection=Depends(get_db),
 ):
+    try:
+        q, skill = clean_project_filters(q, skill)
+    except ValueError as error:
+        field = "q" if "Search" in str(error) else "skill"
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Invalid input", "fields": {field: str(error)}},
+        ) from error
     where = ["p.status = %s"]
     parameters: list[Any] = [status]
     if q:
@@ -313,7 +340,6 @@ def list_projects(
         where.append("(p.title ILIKE %s ESCAPE '\\' OR p.summary ILIKE %s ESCAPE '\\')")
         parameters.extend([f"%{escaped}%", f"%{escaped}%"])
     if skill:
-        wanted_skills = list(dict.fromkeys(skill))
         where.append(
             """
             p.id IN (
@@ -323,6 +349,7 @@ def list_projects(
                     FROM roles r
                     JOIN role_skills rs ON rs.role_id = r.id
                     JOIN skills s ON s.id = rs.skill_id
+                    WHERE r.filled = false
                 ) project_skills_union
                 WHERE slug = ANY(%s)
                 GROUP BY project_id
@@ -330,7 +357,7 @@ def list_projects(
             )
             """
         )
-        parameters.extend([wanted_skills, len(wanted_skills)])
+        parameters.extend([skill, len(skill)])
 
     rows = connection.execute(
         f"""
@@ -363,14 +390,10 @@ def list_projects(
     ]
     selected_sort = sort or ("match" if user_skills else "new")
     if selected_sort == "match" and user_skills:
-        items.sort(
-            key=lambda item: (
-                item["match"]["score"],
-                item["match"]["role_fit"],
-                item["created_at"],
-            ),
-            reverse=True,
-        )
+        items.sort(key=_match_sort_key, reverse=True)
+    for item in items:
+        item.pop("_fit_overlap", None)
+        item.pop("_fit_size", None)
 
     total = len(items)
     offset = (page - 1) * page_size
@@ -424,7 +447,7 @@ def create_project(
     project_id = project["id"]
     _replace_roles(connection, project_id, data.roles)
     if data.repo_url:
-        _refresh_repo_metadata(connection, project_id, data.repo_url)
+        _refresh_repo_metadata(connection, project_id, data.repo_url, url_changed=True)
     return _get_detail(connection, _fetch_project(connection, project_id), user_id)
 
 
@@ -478,24 +501,22 @@ def update_project(
         _replace_roles(connection, project_id, data.roles if data.roles is not None else changes["roles"])
 
     updated_project = _fetch_project(connection, project_id)
-    if changes.get("repo_url", updated_project["repo_url"]) is None:
+    resulting_repo_url = updated_project["repo_url"]
+    if resulting_repo_url is None:
         if "repo_url" in changes:
-            connection.execute(
-                "UPDATE projects SET repo_meta = NULL WHERE id = %s",
-                (project_id,),
+            _refresh_repo_metadata(
+                connection,
+                project_id,
+                None,
+                url_removed=True,
             )
     else:
-        resulting_repo_url = updated_project["repo_url"]
-        cached = (
-            project["repo_meta"]
-            if resulting_repo_url == project["repo_url"] and isinstance(project.get("repo_meta"), dict)
-            else None
-        )
         _refresh_repo_metadata(
             connection,
             project_id,
             resulting_repo_url,
-            cached=cached,
+            cached=project["repo_meta"] if isinstance(project.get("repo_meta"), dict) else None,
+            url_changed=resulting_repo_url != project["repo_url"],
         )
     return _get_detail(connection, _fetch_project(connection, project_id), user_id)
 
@@ -569,13 +590,15 @@ def get_project_suggestions(
 ):
     user_id = require_user_id(request)
     project = connection.execute(
-        "SELECT owner_id FROM projects WHERE id = %s",
+        "SELECT owner_id, status FROM projects WHERE id = %s",
         (project_id,),
     ).fetchone()
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     if project["owner_id"] != user_id:
         raise HTTPException(status_code=403, detail="Only the project owner can do that")
+    if project["status"] != "open":
+        return {"roles": []}
 
     roles = connection.execute(
         """
@@ -627,19 +650,22 @@ def get_project_suggestions(
         )
         student["skills"].append(row["slug"])
 
+    role_inputs = [
+        {
+            "id": role["id"],
+            "title": role["title"],
+            "skills": role_skills.get(role["id"], []),
+            "filled": False,
+        }
+        for role in roles
+    ]
     return {
-        "roles": [
-            {
-                "role_id": role["id"],
-                "title": role["title"],
-                "suggestions": suggest_members(
-                    project["owner_id"],
-                    role_skills.get(role["id"], []),
-                    students.values(),
-                ),
-            }
-            for role in roles
-        ]
+        "roles": build_suggestion_groups(
+            project["status"],
+            project["owner_id"],
+            role_inputs,
+            students.values(),
+        )
     }
 
 

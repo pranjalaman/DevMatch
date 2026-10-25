@@ -4,16 +4,48 @@
 
 let searchTimer = null;
 
+function getTheme() {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+function themeButtonHtml() {
+  const next = getTheme() === 'dark' ? 'light' : 'dark';
+  return `<button class="btn icon-btn" type="button" id="theme-button"
+    aria-label="Switch to ${next} mode" title="Switch to ${next} mode">${icon(next === 'dark' ? 'moon' : 'sun')}</button>`;
+}
+
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#141414' : '#f5f3ee';
+  try {
+    localStorage.setItem('devmatch-theme', theme);
+  } catch (error) {
+    // Private browsing can block storage; the theme still applies for this visit
+  }
+  const button = document.getElementById('theme-button');
+  if (button) {
+    button.outerHTML = themeButtonHtml();
+    document.getElementById('theme-button').onclick = toggleTheme;
+  }
+}
+
+function toggleTheme() {
+  setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+  document.getElementById('theme-button').focus();
+}
+
 function drawHeader() {
   let rightSide;
 
   if (currentUser === null) {
     rightSide = `
+      ${themeButtonHtml()}
       <a class="btn icon-btn" href="#/new" aria-label="Post a new project" title="Post a new project">${icon('plus')}</a>
       <a class="btn btn-sm btn-ghost hide-sm" href="#/login">Log in</a>
       <a class="btn btn-sm btn-primary" href="#/signup">Sign up</a>`;
   } else {
     rightSide = `
+      ${themeButtonHtml()}
       <a class="btn icon-btn" href="#/new" aria-label="Post a new project" title="Post a new project">${icon('plus')}</a>
       <div class="user-menu-wrap" id="user-menu-wrap">
         <button class="btn menu-btn" type="button" id="menu-button" aria-expanded="false" aria-controls="user-menu"
@@ -47,6 +79,8 @@ function drawHeader() {
       </form>
       <div class="header-actions">${rightSide}</div>
     </div>`;
+
+  document.getElementById('theme-button').onclick = toggleTheme;
 
   // --- Search box ---
   const searchInput = document.getElementById('search-input');

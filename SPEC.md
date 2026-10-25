@@ -96,7 +96,7 @@ Priority: **P0** = must ship for demo, **P1** = should ship, **P2** = stretch.
 - AC: For each open role, I see up to 5 users whose skills overlap the role's required skills, ranked by overlap, with their name, branch/year, and matched skills.
 
 **US-7 (Seeker, F8)** — As a student, I jump to the repo or contact the lead in one tap.
-- AC: "Contact lead" opens `mailto:` (or the optional contact URL). "View repo" opens GitHub in a new tab with `rel="noopener noreferrer"`.
+- AC: A logged-in viewer gets `mailto:` when the project has a contact email, and a separate contact-URL action when that URL is a valid http(s) link. "View repo" opens GitHub in a new tab with `rel="noopener noreferrer"`.
 - AC: If the GitHub API fails, the popup still renders; repo stats are simply omitted.
 
 ---
@@ -216,33 +216,40 @@ Requires `CREATE EXTENSION IF NOT EXISTS citext;`.
 Pure functions. No database or network calls inside. Inputs are plain sets.
 
 ### 7.1 Canonical skill selection
-The frontend resolves the user's typed label or supported alias to an existing canonical lowercase slug before submitting it. The API validates submitted slugs against `skills.slug` and rejects unknown values with a `422` and suggestions. The API does not normalize arbitrary free text or create new skills.
+Skill writes accept a canonical slug, its display label, or a supported alias, in any letter case, and store only the canonical slug. Supported aliases: `js` → javascript, `py` → python, `reactjs` and `react.js` → react, `node` and `node.js` → nodejs, `postgres` → postgresql, `ml` → machine-learning, `cpp` → `c++`, `ts` → typescript. Unknown values are rejected with a `422` and suggestions. The API does not create new skills. Skill filters compare the decoded query value with the canonical slug, so `c++` must be percent-encoded.
 
 ### 7.2 Scoring
 
-Given user skill set `U`, project skill set `S` (the union of required skills across all project roles), and open (unfilled) roles `R₁…Rₙ` each with required set `Rᵢ.skills`:
+Given user skill set `U` and unfilled roles `R₁…Rₙ`, `S` is the union of skills on those unfilled roles. Skills that appear only on filled roles are not part of `S` and do not affect the score. A role with no required skills adds nothing.
 
 ```
-stack_coverage = |U ∩ S| / |S|                       (0 if S empty)
-role_fit       = max over open roles of |U ∩ Rᵢ| / |Rᵢ|   (0 if no open roles)
-score          = round(100 × (0.6 × role_fit + 0.4 × stack_coverage))
+stack_coverage = |U ∩ S| / |S|                         (0 if S empty)
+role_fit       = max over unfilled roles with skills of |U ∩ Rᵢ| / |Rᵢ|
+score          = half_up(100 × (0.6 × role_fit + 0.4 × stack_coverage))
 ```
 
-- Closed projects are excluded from ranking by default.
-- Tie-break: higher `role_fit`, then newer `created_at`.
-- Returned reasons: `matched_skills` (top 3 of `U ∩ S`, alphabetical), `best_role` (title of the role giving `role_fit`, if > 0).
+Half-up is arithmetic rounding (12.5 becomes 13), computed from the integer counts so binary floats cannot change the result. The implementation lives in `tests.test_matcher`.
+
+- The match object is omitted when the viewer is logged out, has no skills, is the project owner, or the project has no unfilled role. A non-owner with skills still receives a match object, including score 0, when an unfilled role exists.
+- Closed projects are excluded from the default feed. Match sort orders by score descending, then role fit descending, then newer `created_at`, then higher project id.
+- Best role: greatest role fit, then larger overlap count, then lower role id. Omit it when that fit is 0.
+- `matched_skills`: at most 3. Alphabetical overlap with the best role first, then the remaining open-stack overlap in alphabetical order.
 
 ### 7.3 Suggested members (F7)
-For a given open role with required set `Rᵢ`, rank users by `|U ∩ Rᵢ| / |Rᵢ|` descending, excluding the project owner and users with overlap 0. Return top 5.
+Suggestions are returned only while the project is open. For each unfilled role with required set `Rᵢ`, rank other students by `|U ∩ Rᵢ| / |Rᵢ|` descending, excluding the project owner and students with overlap 0. Equal scores use case-insensitive name order. Return at most 5. Each suggestion includes name, branch, year, matched skills, and score, and does not include an email or other contact channel.
 
 ### 7.4 Test cases (must pass before merge)
-| User skills | Stack | Open roles | Expected |
+These rows are the cases asserted by `python -m unittest tests.test_matcher`.
+
+| User skills | Open-role stack | Roles | Expected |
 |---|---|---|---|
-| {python, flask} | {python, flask, postgresql} | [] | coverage 0.667 → score 27 |
-| {react} | {python} | [Frontend: {react, css}] | role_fit 0.5, coverage 0 → score 30 |
-| {} | any | any | score 0, no badge |
-| {python} | {} | [] | score 0, no division error |
-| {python} | {python} | [Backend: {python}] | score 100 |
+| {python} | {python} | open Backend id 1: {python} | score 100, best role Backend |
+| {skill-0} | {skill-0 … skill-7} | open Generalist: those 8 skills | score 13 |
+| {python} | {figma} | filled Backend: {python}; open Design: {figma} | score 0, no matched skills, no best role |
+| {python} | {} | open Unspecified: {} | score 0, no division error |
+| {python, react} | {python, react} | open Later id 5: {react}; open Earlier id 2: {python} | best role Earlier |
+| {python, django} | {python, django} | open Narrow: {python}; open Wide: {python, django} | best role Wide |
+| viewer is owner, has no skills, or every role is filled | any | any | no match badge |
 
 ---
 
@@ -282,11 +289,11 @@ Base path `/api`. JSON in/out. Auth via session cookie. All write endpoints requ
 ### 8.3 `GET /projects` query params
 | Param | Type | Notes |
 |---|---|---|
-| `q` | string | Case-insensitive match on title/summary |
-| `skill` | repeatable | Project must contain **all** given skills |
+| `q` | string | Trimmed, case-insensitive match on title/summary. Blank after trimming is ignored. Longer than 100 characters is a validation error |
+| `skill` | repeatable | Project must have **each** skill on an unfilled role. Repeats count once. More than 10 values is a validation error |
 | `status` | `open`\|`closed` | Default `open` |
 | `sort` | `match`\|`new` | Default `match` if logged in with skills, else `new` |
-| `page`, `page_size` | int | Defaults 1 and 12; max page_size 50 |
+| `page`, `page_size` | int | Defaults 1 and 12; max page_size 50. A page past the end returns an empty `items` list and the real `total` |
 
 Response:
 ```json
@@ -300,16 +307,16 @@ Response:
   "page": 1, "page_size": 12, "total": 31
 }
 ```
-`match` is `null` when logged out or user has no skills.
-The response's `skills` list is the sorted union of role-required skills across
-the project. Projects without roles have no derived skill tags and receive no
-stack-coverage contribution.
+`match` is `null` when the viewer is logged out, has no skills, owns the project, or the project has no unfilled role.
+The response's `skills` list is the sorted union of every role's skills, including filled roles, and is what cards show. Filters do not use that full union. The application does not read or write `project_skills`. Projects without roles have no derived skill tags.
 
 ### 8.4 `GET /projects/{id}` additions
-Adds `description`, `roles[{id,title,skills[],filled}]`, `repo_url`, `repo_meta`, `created_at`. Adds `contact_email` and `contact_url` **only if authenticated**. The detail response does not repeat project `skills`; clients derive the displayed stack from role skills. The list response retains the combined `skills` field for cards and filtering.
+Adds `description`, `roles[{id,title,skills[],filled}]`, `repo_url`, `repo_meta`, `created_at`. Adds `contact_email` and `contact_url` **only if authenticated**. A logged-in viewer gets a mailto action when `contact_email` is present and a separate http(s) link when `contact_url` is valid. The detail response does not repeat project `skills`; clients derive the displayed stack from role skills, including filled roles. Suggestions for a closed project are an empty list.
+
+Replacing roles with `PATCH` sends the full role list. Roles left out are deleted. A role id from another project is rejected and the current roles stay as they were. Omitting `filled` on an existing role keeps the stored value. A new role that omits `filled` is unfilled.
 
 ### 8.5 Validation limits
-Title ≤80, summary ≤200, description ≤4000, role title ≤60, ≤10 roles per project, ≤15 distinct required skills across a project's roles, ≤30 skills per user, password ≥8 chars. Role skill values must be canonical slugs present in the `skills` table. `repo_url` must match `^https://github\.com/[\w.-]+/[\w.-]+/?$`.
+Title ≤80, summary ≤200, description ≤4000, role title ≤60. Title, summary, and role title are a single line. ≤10 roles per project, ≤15 distinct required skills across a project's roles, ≤30 skills per user. Signup password is 8–128 characters. Login does not reject a password only because it is longer than 128. Signup branch must be one of CSE, IT, ECE, EE, ME, CE, CHE, MIN, MET, PIE. An existing account with another branch can still log in. Search ≤100 characters. ≤10 skill filters. Role skill values must resolve through §7.1. `repo_url` must match `^https://github\.com/[\w.-]+/[\w.-]+/?$`.
 
 ---
 
@@ -318,8 +325,9 @@ Title ≤80, summary ≤200, description ≤4000, role title ≤60, ≤10 roles 
 - On project create/update with a `repo_url`, parse `owner/repo` and call `GET https://api.github.com/repos/{owner}/{repo}`.
 - Store only `{stars, language, pushed_at, fetched_at}` in `repo_meta`.
 - Use `GITHUB_TOKEN` (read-only, no scopes) to raise the rate limit from 60/hr to 5000/hr.
-- **Fail-soft:** timeout 3s; on any error, store nothing, log a warning, and continue. Never block project creation on GitHub.
+- **Fail-soft:** timeout 3s. A failed fetch keeps the last snapshot when the repository URL is unchanged, including a forced refresh. Removing the URL clears the snapshot. Changing the URL does not keep the previous repository's snapshot; a failed fetch for the new URL leaves the snapshot empty. Log a warning and continue. Never block project creation on GitHub.
 - Cache: do not refetch if `fetched_at` < 6 hours old unless `refresh-repo` is called.
+- When a URL is set and the snapshot is empty, the project view says repository stats are unavailable. A snapshot with no language omits the language rather than inventing one.
 
 ---
 
@@ -341,13 +349,14 @@ Single page, hash-routed. No framework, no build step.
 |---|---|---|
 | `#/` | Feed | Search bar, skill filter chips, card grid, pagination |
 | `#/project/{id}` | Feed + Modal | Popup opens over the feed; closing returns to `#/` |
-| `#/new` | Project form | Create/edit; inline validation |
+| `#/new` | Project form | Create; inline validation |
+| `#/edit/{id}` | Project form | Owner only. Another student sees no editor |
 | `#/profile` | Profile | Name, branch, year, skill picker |
 | `#/login`, `#/signup` | Auth forms | |
 
 ### 10.3 Components
 - **ProjectCard:** title, summary (2-line clamp), tech chips derived from role skills (max 4 + "+N"), open-role count, match badge (if present), lead name.
-- **ProjectModal:** sections — overview, stack, open roles (each with required skill chips), contact (`Contact lead`, `View repo`), repo stats if available.
+- **ProjectModal:** sections — overview, stack, open roles (each with required skill chips), contact (`Email lead` and, when set, `Open contact link`), `View repo`, repo stats if available. A missing project shows a not-found state with a way back to the feed and no retry. A feed page past the last page shows an out-of-range state, not an empty marketplace.
 - **SkillPicker:** type-ahead over `/skills`, multi-select chips.
 - **Toast:** non-blocking success/error messages.
 
@@ -383,9 +392,9 @@ Loading (skeleton cards) · Empty (message + action) · Error (message + retry) 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Neon connection string (`sslmode=require`) |
-| `SECRET_KEY` | Session cookie signing (`SessionMiddleware`) |
+| `SECRET_KEY` | Session cookie signing (`SessionMiddleware`). Required whenever `APP_ENV` is not `development` |
 | `GITHUB_TOKEN` | Optional, raises rate limit |
-| `APP_ENV` | `development` / `production` (controls `Secure` cookie flag and `/docs`) |
+| `APP_ENV` | Missing or `development` is local. Any other value requires `SECRET_KEY`. `production` also sets the `Secure` cookie flag and hides `/docs` |
 
 ---
 

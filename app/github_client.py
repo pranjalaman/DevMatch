@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from http.client import HTTPException as HTTPClientError
 from urllib.error import HTTPError, URLError
@@ -12,13 +13,35 @@ _REPO_PATH = re.compile(r"^https://github\.com/([\w.-]+)/([\w.-]+)/?$")
 _CACHE_AGE = timedelta(hours=6)
 
 
-def fetch_repo_metadata(repo_url: str, *, force: bool = False, cached: dict | None = None):
-    if not repo_url:
+@dataclass(frozen=True)
+class RepoFetch:
+    status: str
+    metadata: dict | None
+
+
+def decide_repo_meta(
+    *,
+    url_removed: bool,
+    url_changed: bool,
+    fetch: RepoFetch,
+    previous: dict | None,
+) -> dict | None:
+    if url_removed:
         return None
+    if fetch.status in {"success", "cache"}:
+        return fetch.metadata
+    if url_changed:
+        return None
+    return previous
+
+
+def fetch_repo_metadata(repo_url: str, *, force: bool = False, cached: dict | None = None) -> RepoFetch:
+    if not repo_url:
+        return RepoFetch("failure", None)
 
     match = _REPO_PATH.fullmatch(repo_url)
     if not match:
-        return None
+        return RepoFetch("failure", None)
 
     now = datetime.now(UTC)
     if not force and cached:
@@ -27,7 +50,7 @@ def fetch_repo_metadata(repo_url: str, *, force: bool = False, cached: dict | No
             try:
                 fetched = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
                 if now - fetched < _CACHE_AGE:
-                    return cached
+                    return RepoFetch("cache", cached)
             except (TypeError, ValueError):
                 pass
 
@@ -46,12 +69,15 @@ def fetch_repo_metadata(repo_url: str, *, force: bool = False, cached: dict | No
     try:
         with urlopen(request, timeout=3) as response:
             data = json.load(response)
-        return {
-            "stars": data["stargazers_count"],
-            "language": data.get("language"),
-            "pushed_at": data.get("pushed_at"),
-            "fetched_at": now.isoformat(),
-        }
+        return RepoFetch(
+            "success",
+            {
+                "stars": data["stargazers_count"],
+                "language": data.get("language"),
+                "pushed_at": data.get("pushed_at"),
+                "fetched_at": now.isoformat(),
+            },
+        )
     except (
         HTTPClientError,
         HTTPError,
@@ -62,4 +88,4 @@ def fetch_repo_metadata(repo_url: str, *, force: bool = False, cached: dict | No
         KeyError,
     ) as error:
         logger.warning("GitHub repository metadata fetch failed: %s", type(error).__name__)
-        return None
+        return RepoFetch("failure", None)
