@@ -32,6 +32,26 @@ check('null snapshot is unavailable', missingStats.state === 'unavailable' && mi
 const noLanguage = context.repoStatsSummary({ stars: 2, language: null, pushed_at: null });
 check('missing language is not invented', noLanguage.state === 'ready' && noLanguage.language === null && noLanguage.stars === 2);
 
+const october = new Date(2026, 9, 26);
+const choices = context.joiningYearChoices(october);
+check('october 2026 choices run from 2026 back to 2021', choices.join(',') === '2026,2025,2024,2023,2022,2021');
+check('july 2027 still uses the calendar year', context.joiningYearChoices(new Date(2027, 6, 31)).join(',') === '2027,2026,2025,2024,2023,2022');
+check('github profile link', context.isGithubProfileLink('https://github.com/ada') === true);
+check('github repo is not a profile link', context.isGithubProfileLink('https://github.com/ada/devmatch') === false);
+
+const year3 = context.cardStandingPresentation('Year 3');
+check('year 3 card attribute', year3.attribute === ' data-standing="3"' && year3.text === 'Year 3');
+const year1 = context.cardStandingPresentation('Year 1');
+check('year 1 uses yellow', year1.tone === '--yellow');
+const finished = context.cardStandingPresentation('Finished');
+check('finished has no year color', finished.text === 'Finished' && finished.attribute === '' && finished.tone === '');
+
+const css = fs.readFileSync('frontend/css/components.css', 'utf8');
+for (const [number, tone] of [['1', '--yellow'], ['2', '--green'], ['3', '--blue'], ['4', '--pink'], ['5', '--purple']]) {
+  check('css ' + tone, css.includes(`.card[data-standing="${number}"] { background: var(${tone}); }`));
+}
+check('no second dark card palette', !css.includes('[data-theme="dark"] .card[data-standing'));
+
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);

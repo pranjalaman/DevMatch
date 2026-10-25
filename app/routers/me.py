@@ -1,9 +1,10 @@
 from difflib import get_close_matches
 
+from app.academic_year import with_standing
 from app.database.db import get_db
 from app.skill_names import resolve_skill_list
 from app.rate_limit import enforce_write_limit
-from app.schemas.profile import ProfileResponse, SkillsData, SkillsResponse
+from app.schemas.profile import ProfileDetails, ProfileResponse, SkillsData, SkillsResponse
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 router = APIRouter(prefix="/api", tags=["profile"])
@@ -41,7 +42,7 @@ def get_me(request: Request, connection=Depends(get_db)):
     user_id = require_user_id(request)
     user = connection.execute(
         """
-        SELECT id, name, email, branch, year, github_url
+        SELECT id, name, email, branch, joined_year, github_url, gender, dob
         FROM users
         WHERE id = %s
         """,
@@ -53,7 +54,30 @@ def get_me(request: Request, connection=Depends(get_db)):
         raise HTTPException(status_code=401, detail="Please log in again")
 
     user["skills"] = get_user_skills(connection, user_id)
-    return user
+    return with_standing(user)
+
+
+@router.patch("/me", response_model=ProfileResponse)
+def update_profile(
+    data: ProfileDetails,
+    request: Request,
+    connection=Depends(get_db),
+):
+    user_id = require_write_user_id(request)
+    user = connection.execute(
+        """
+        UPDATE users
+        SET joined_year = %s, github_url = %s, gender = %s, dob = %s
+        WHERE id = %s
+        RETURNING id, name, email, branch, joined_year, github_url, gender, dob
+        """,
+        (data.joined_year, data.github_url, data.gender, data.dob, user_id),
+    ).fetchone()
+    if not user:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="Please log in again")
+    user["skills"] = get_user_skills(connection, user_id)
+    return with_standing(user)
 
 
 @router.put("/me/skills", response_model=SkillsResponse)

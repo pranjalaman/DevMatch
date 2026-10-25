@@ -1,8 +1,10 @@
 from collections import defaultdict
+from datetime import date
 from difflib import get_close_matches
 from fractions import Fraction
 from typing import Any
 
+from app.academic_year import owner_view, standing_label
 from app.database.db import get_db
 from app.github_client import decide_repo_meta, fetch_repo_metadata
 from app.matcher import build_suggestion_groups, visible_match
@@ -97,7 +99,12 @@ def _format_project(
         "summary": row["summary"],
         "open_roles": len(open_roles),
         "status": row["status"],
-        "owner": {"id": row["owner_id"], "name": row["owner_name"]},
+        "owner": owner_view(
+            row["owner_id"],
+            row["owner_name"],
+            row["owner_joined_year"],
+            date.today(),
+        ),
         "created_at": row["created_at"],
         "match": None,
     }
@@ -247,7 +254,7 @@ def _fetch_project(connection, project_id: int):
         """
         SELECT p.id, p.owner_id, p.title, p.summary, p.description, p.status,
                p.contact_email, p.contact_url, p.repo_url, p.repo_meta, p.created_at,
-               u.name AS owner_name
+               u.name AS owner_name, u.joined_year AS owner_joined_year
         FROM projects p
         JOIN users u ON u.id = p.owner_id
         WHERE p.id = %s
@@ -363,7 +370,7 @@ def list_projects(
         f"""
         SELECT p.id, p.owner_id, p.title, p.summary, p.description, p.status,
                p.contact_email, p.contact_url, p.repo_url, p.repo_meta, p.created_at,
-               u.name AS owner_name
+               u.name AS owner_name, u.joined_year AS owner_joined_year
         FROM projects p
         JOIN users u ON u.id = p.owner_id
         WHERE {" AND ".join(where)}
@@ -629,7 +636,7 @@ def get_project_suggestions(
     students: dict[int, dict] = {}
     for row in connection.execute(
         """
-        SELECT u.id, u.name, u.branch, u.year, s.slug
+        SELECT u.id, u.name, u.branch, u.joined_year, s.slug
         FROM users u
         JOIN user_skills us ON us.user_id = u.id
         JOIN skills s ON s.id = us.skill_id
@@ -644,7 +651,7 @@ def get_project_suggestions(
                 "id": row["id"],
                 "name": row["name"],
                 "branch": row["branch"],
-                "year": row["year"],
+                "standing": standing_label(row["joined_year"], date.today()),
                 "skills": [],
             },
         )

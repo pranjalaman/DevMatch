@@ -73,8 +73,8 @@ function showSignupPage() {
   }
 
   let yearOptions = '<option value="">Select year</option>';
-  for (let year = 1; year <= 5; year++) {
-    yearOptions += `<option value="${year}">Year ${year}</option>`;
+  for (const year of joiningYearChoices()) {
+    yearOptions += `<option value="${year}">${year}</option>`;
   }
 
   mainArea.innerHTML = `
@@ -88,7 +88,7 @@ function showSignupPage() {
         ${fieldHtml('password', 'Password', '<input class="input" id="password" type="password" autocomplete="new-password" aria-describedby="password-error">', 'At least 8 characters.')}
         <div class="form-row">
           ${fieldHtml('branch', 'Branch', `<select class="select select-block" id="branch" aria-describedby="branch-error">${branchOptions}</select>`)}
-          ${fieldHtml('year', 'Year', `<select class="select select-block" id="year" aria-describedby="year-error">${yearOptions}</select>`)}
+          ${fieldHtml('joined_year', 'Year you joined', `<select class="select select-block" id="joined_year" aria-describedby="joined_year-error">${yearOptions}</select>`)}
         </div>
         <button class="btn btn-primary btn-lg btn-block" type="submit" id="submit-button">Create account</button>
       </form>
@@ -111,7 +111,7 @@ async function submitSignup(event) {
     email: document.getElementById('email').value.trim(),
     password: document.getElementById('password').value,
     branch: document.getElementById('branch').value,
-    year: Number(document.getElementById('year').value),
+    joined_year: Number(document.getElementById('joined_year').value),
   };
 
   let hasErrors = false;
@@ -119,7 +119,7 @@ async function submitSignup(event) {
   if (!isValidEmail(data.email)) { showFieldError('email', 'Enter a valid email address'); hasErrors = true; }
   if (data.password.length < 8) { showFieldError('password', 'Use at least 8 characters'); hasErrors = true; }
   if (data.branch === '') { showFieldError('branch', 'Select your branch'); hasErrors = true; }
-  if (data.year === 0) { showFieldError('year', 'Select your year'); hasErrors = true; }
+  if (!data.joined_year) { showFieldError('joined_year', 'Select the year you joined'); hasErrors = true; }
   if (hasErrors) {
     focusFirstError(form);
     return;

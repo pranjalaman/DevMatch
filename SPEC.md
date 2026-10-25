@@ -24,9 +24,9 @@ The product promises four things:
 - Every match can be explained. A score always comes with the skills that produced it and, when one role clearly fits, the name of that role.
 - The board stays useful after a single event. Open work is what the feed shows. Closed work remains readable, and it leaves the default feed.
 
-DevMatch is a campus board, not a job marketplace. It does not take payment, collect ratings, or run an in-app conversation. Matching is a formula over skill sets, not a model. There is one college, BIT Sindri, and the interface is a responsive website. Admin moderation, GitHub login, and generated summaries are not part of the product today. A lead's suggested students are names, branch, and year. The product does not hand the lead that student's email.
+DevMatch is a campus board, not a job marketplace. It does not take payment, collect ratings, or run an in-app conversation. Matching is a formula over skill sets, not a model. There is one college, BIT Sindri, and the interface is a responsive website. Admin moderation, GitHub login, and generated summaries are not part of the product today. A lead's suggested students are names, branch, and study standing. The product does not hand the lead that student's email.
 
-Signup asks for a real email address and one of the campus branches: CSE, IT, ECE, EE, ME, CE, CHE, MIN, MET, PIE. The address does not have to be a college domain. An account created earlier with some other branch can still log in.
+Signup asks for a real email address, the calendar year the student joined, and one of the campus branches: CSE, IT, ECE, EE, ME, CE, CHE, MIN, MET, PIE. The address does not have to be a college domain. An account created earlier with some other branch can still log in.
 
 ## A visit
 
@@ -83,11 +83,11 @@ FastAPI  (uvicorn)
 
 A few choices explain the shape of the code:
 
-- **FastAPI with ordinary `def` routes and sync `psycopg`.** FastAPI runs those routes on a threadpool. The handlers stay straight-line database code.
+- **FastAPI with ordinary** `def` **routes and sync** `psycopg`**.** FastAPI runs those routes on a threadpool. The handlers stay straight-line database code.
 - **Pydantic for every write.** Limits live next to the fields. Validation errors are rewritten into one JSON shape the forms already understand.
 - **No ORM.** Queries are SQL strings with parameters. The matching math never runs inside SQL. The database returns rows, and `app/matcher` scores them.
 - **No frontend build.** Pages are script files loaded in order from `index.html`. Shared decisions such as "is this page out of range?" live in `frontend/js/helpers.js` so the views stay thin.
-- **Sessions, not tokens in `localStorage`.** The password is stored as an Argon2 hash (`pwdlib`). Starlette's session middleware signs a cookie. Production refuses to boot without `SECRET_KEY` and marks that cookie `Secure`.
+- **Sessions, not tokens in** `localStorage`**.** The password is stored as an Argon2 hash (`pwdlib`). Starlette's session middleware signs a cookie. Production refuses to boot without `SECRET_KEY` and marks that cookie `Secure`.
 - **The database is provisioned outside this repository.** Schema, the canonical skill list, and any sample rows are applied to PostgreSQL directly. This repo owns the application that reads and writes them.
 
 `/api/health` answers `{ "status": "ok" }` when the process is up. It does not open the database. A missing `DATABASE_URL`, or a connection failure, becomes `503` on the request that needed the database. Each request opens one connection, commits when the handler returns, and rolls back when the handler raises.
@@ -104,6 +104,7 @@ devmatch/
 │  ├─ runtime.py           when a session secret is required
 │  ├─ rate_limit.py        in-memory auth and write limits
 │  ├─ skill_names.py       aliases and the canonical skill resolver
+│  ├─ academic_year.py     session year and study standing
 │  ├─ database/db.py       connection per request
 │  ├─ routers/             auth.py, me.py, projects.py, skills.py
 │  ├─ schemas/             auth, profile, user, project
@@ -126,8 +127,10 @@ CREATE TABLE users (
   email         citext      NOT NULL UNIQUE,
   password_hash text        NOT NULL,
   branch        text        NOT NULL,
-  year          smallint    NOT NULL CHECK (year BETWEEN 1 AND 5),
-  github_url    text,
+  joined_year   smallint    NOT NULL,          -- calendar year they entered college
+  github_url    text,                  -- https://github.com/{username}
+  gender        text        CHECK (gender IS NULL OR gender IN ('female', 'male', 'other')),
+  dob           date,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -187,7 +190,7 @@ CREATE INDEX idx_roles_project           ON roles (project_id);
 
 Deleting a user deletes their projects. Deleting a project deletes its roles and the skills on those roles. A skill row is created only in the database, never by a signup or a project form.
 
-`users.github_url` is stored and returned on the profile. The current product has no screen that sets it.
+`joined_year` is the stored fact. The study standing shown on a profile, a card, and a suggestion is calculated from it, as described under Academic year. The profile can also store a GitHub profile URL (`https://github.com/{username}`), a gender (`female`, `male`, or `other`), and a date of birth. A blank value clears that field. A repository URL is not a profile URL. A date of birth cannot be in the future.
 
 ## Skills
 
@@ -209,6 +212,24 @@ An unknown value is a `422`, with close suggestions when the catalog has them. T
 A profile holds at most 30 skills. A project holds at most 15 distinct skills across its roles, counted after aliases have been folded into slugs. Skill filters compare the decoded query value with the slug. In a query string, `c++` has to be percent-encoded, because a raw `+` means a space.
 
 The seeded catalog is the campus-sized list the pickers search: languages and frameworks (`python`, `fastapi`, `react`, `c++`, …), tools (`git`, `docker`, `figma`), and a few non-code skills (`ui-design`, `technical-writing`). The database is the source of that list. `GET /api/skills` returns `{ slug, label }` ordered by label.
+
+## Academic year
+
+The year a student is in is not stored. Signup stores the calendar year they joined, and `app/academic_year.py` turns that into a standing for a given date. The academic session turns on 1 August. On and after that date the session year is the calendar year. Before that date it is the previous calendar year.
+
+```
+study year = session year - joining year + 1
+```
+
+A study year from 1 to 5 is shown as `Year N`. Below 1 is `Incoming`. Above 5 is `Finished`.
+
+| Date | Session year | Joined 2024 |
+|---|---|---|
+| 26 October 2026 | 2026 | Year 3 |
+| 31 July 2027 | 2026 | Year 3 |
+| 1 August 2027 | 2027 | Year 4 |
+
+A joining year ahead of the session would be Incoming, and a joining year of 2020 is Finished on 26 October 2026. Signup and the profile only offer the calendar year and the five years before it, newest first. On 26 October 2026 those years are 2026 through 2021.
 
 ## Matching
 
@@ -242,7 +263,7 @@ These rows are the cases `python -m unittest tests.test_matcher` locks in:
 | python, django | both | Narrow needs python; Wide needs both | best role is Wide |
 | owner, or no skills, or every role filled | anything | anything | no match object |
 
-Suggestions use the same overlap idea, per role. They are returned only while the project is open. For each unfilled role that has skills, other students are ranked by the fraction of that role they cover. The owner is excluded. So is anyone with no overlap. Equal fractions sort by name, case-insensitively. At most five people are returned, each with name, branch, year, matched skills, and score. No email and no contact link.
+Suggestions use the same overlap idea, per role. They are returned only while the project is open. For each unfilled role that has skills, other students are ranked by the fraction of that role they cover. The owner is excluded. So is anyone with no overlap. Equal fractions sort by name, case-insensitively. At most five people are returned, each with name, branch, calculated study standing, matched skills, and score. No email, no joining year, and no contact link.
 
 ## Projects and the feed
 
@@ -266,7 +287,7 @@ Only the owner can update or delete a project, mark a role filled, refresh repo 
 
 ## Accounts
 
-Signup creates the user and starts the session. The body is name, email, password, branch, and year (1 through 5). The password is 8 to 128 characters. Login checks the email and password and does not reject a password only because it is longer than 128. A duplicate email is `409`. Email is stored in lowercase.
+Signup creates the user and starts the session. The body is name, email, password, branch, and `joined_year`. The password is 8 to 128 characters. Login checks the email and password and does not reject a password only because it is longer than 128. A duplicate email is `409`. Email is stored in lowercase. Signup, login, and `GET /api/me` return `joined_year` and the calculated `standing`. `PATCH /api/me` saves the joining year, GitHub profile URL, gender, and date of birth together. The profile page shows the standing and those fields.
 
 The session cookie is `HttpOnly` and `SameSite=Lax`. When `APP_ENV=production` it is also `Secure`, and `/docs` and `/redoc` are turned off. If `APP_ENV` is missing or `development`, a missing `SECRET_KEY` is replaced with a generated secret for that process. Any other `APP_ENV` without `SECRET_KEY` raises before the process serves traffic.
 
@@ -327,7 +348,8 @@ Success is `200` or `201` with a body. Delete is `204`. Every error uses the sam
 | POST | `/auth/signup` | no | Create an account and start the session |
 | POST | `/auth/login` | no | Start the session |
 | POST | `/auth/logout` | yes | End the session |
-| GET | `/me` | yes | Current user and skills |
+| GET | `/me` | yes | Current user, joining year, standing, and skills |
+| PATCH | `/me` | yes | Replace the joining year |
 | PUT | `/me/skills` | yes | Replace the skill set |
 | GET | `/skills` | no | Canonical skill list |
 | GET | `/projects` | optional | Search, filter, and list |
@@ -351,7 +373,7 @@ A list item looks like this. `match` is `null` in the cases described under Matc
     "skills": ["python", "flask"],
     "open_roles": 2,
     "status": "open",
-    "owner": { "id": 3, "name": "A. Kumar" },
+    "owner": { "id": 3, "name": "A. Kumar", "standing": "Year 3" },
     "match": {
       "score": 72,
       "matched_skills": ["flask", "python"],
@@ -378,10 +400,10 @@ One page, hash-routed. There is no framework and no build. `index.html` loads th
 | `#/project/{id}` | The same feed, with that project open in a dialog |
 | `#/new` | Create a project |
 | `#/edit/{id}` | Edit. Only the owner sees the form. Anyone else sees a short message and no form |
-| `#/profile` | Name, branch, year, skills |
+| `#/profile` | Name, branch, study standing, joining year, skills |
 | `#/login`, `#/signup` | Account forms |
 
-Cards clamp the summary to two lines and show at most four tech chips plus a "+N". The dialog has the overview, the stack, each role with its skills, contact, the repo link, and repo stats when a snapshot exists. A missing project is a not-found message with a way back to the feed, and it does not offer a retry. Contact for a logged-in viewer is "Email lead" when there is a contact email, and "Open contact link" when the contact URL is http(s). "View repo" opens in a new tab with `rel="noopener noreferrer"`. Logged-out viewers get a path to log in instead of the contact actions.
+Cards clamp the summary to two lines and show at most four tech chips plus a "+N". The lead's standing is written beside their name. In both themes the card background is yellow for Year 1, green for Year 2, blue for Year 3, pink for Year 4, and purple for Year 5, using the accent colors that already darken with the theme. Incoming and Finished stay on the plain card surface. The dialog has the overview, the stack, each role with its skills, contact, the repo link, and repo stats when a snapshot exists. A missing project is a not-found message with a way back to the feed, and it does not offer a retry. Contact for a logged-in viewer is "Email lead" when there is a contact email, and "Open contact link" when the contact URL is http(s). "View repo" opens in a new tab with `rel="noopener noreferrer"`. Logged-out viewers get a path to log in instead of the contact actions.
 
 The skill picker is a typeahead over `GET /api/skills`. Toasts are non-blocking.
 
@@ -411,7 +433,8 @@ A public process runs `uvicorn app.main:app --host 0.0.0.0 --port $PORT` after `
 | `tests.test_matcher` | Scores, best role, chips, owner and filled-role cases, suggestions |
 | `tests.test_listings` | Search and skill-filter limits, role replacement, single-line titles |
 | `tests.test_github_meta` | When a snapshot is kept, cleared, or replaced |
-| `tests.test_accounts` | Aliases, unknown skills, signup password and branch limits |
+| `tests.test_academic_year` | Session dates, standing labels, joining-year window, lead and suggestion standing |
+| `tests.test_accounts` | Aliases, unknown skills, signup password, branch, and joining year |
 | `tests.test_runtime` | When the process refuses to start without `SECRET_KEY` |
 | `tests/render_states.js` | Feed out-of-range copy, contact actions, not-found copy, edit permission, empty repo stats. Run with `node tests/render_states.js` |
 
@@ -427,15 +450,13 @@ This is the place for a 3am idea. Write it at the top of the list, in a sentence
 
 An entry in this list is not a promise and it is not how the product works. The sections above stay the description of what is shipped. When an idea ships, move the behavior into the section it belongs to and delete the entry.
 
-- **Let a lead reach a suggested student.** Suggestions today are name, branch, and year. A lead still has no way to contact that person, and the student's email stays off the suggestion on purpose.
+- **Let a lead reach a suggested student.** Suggestions today are name, branch, and study standing. A lead still has no way to contact that person, and the student's email stays off the suggestion on purpose.
 - **Someone besides the owner can take a listing down.** Spam and abandoned posts can only be edited or deleted by the student who created them.
 - **Open listings that go quiet.** A project can stay `open` forever, including one whose roles are all filled. Nothing nudges the lead or moves a stale listing off the default feed.
 - **Prove the signup email.** Any address is accepted, and the branch list is the only campus fence. Confirming the inbox, or requiring a college domain, would make an account harder to fake.
-- **Set a GitHub profile URL.** `users.github_url` is stored and returned. No screen writes it.
 - **Sign in with GitHub.** Accounts are email and password only.
 - **Generated card summaries.** Descriptions are whatever the lead wrote. Nothing rewrites them.
-- **More than one college.** The branch list, the copy, and the data model are BIT Sindri.
 - **A conversation inside the product.** Contact leaves the site through email, a contact link, or GitHub.
-- **Decide what `project_skills` is for.** The table is in the database. The app derives tags from role skills and does not read or write `project_skills`.
+- **Decide what** `project_skills` **is for.** The table is in the database. The app derives tags from role skills and does not read or write `project_skills`.
 - **A health check that notices the database.** `/api/health` only reports that the process is up. A bad `DATABASE_URL` shows up later, as a `503` on a real request.
 - **Rate limits that survive a restart.** Auth is 10 requests a minute per IP and writes are 60 a minute per user, counted in memory inside one process.

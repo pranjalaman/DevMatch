@@ -144,6 +144,11 @@ function isGithubRepoLink(url) {
   return /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url);
 }
 
+// A profile link has one name, not owner/repo.
+function isGithubProfileLink(url) {
+  return /^https:\/\/github\.com\/[\w.-]+\/?$/.test(url);
+}
+
 const BRANCHES = [
   { code: 'CSE', name: 'Computer Science & Engg.' },
   { code: 'IT', name: 'Information Technology' },
@@ -156,6 +161,38 @@ const BRANCHES = [
   { code: 'MET', name: 'Metallurgical Engg.' },
   { code: 'PIE', name: 'Production & Industrial Engg.' },
 ];
+
+// Current calendar year, then the five years before it.
+function joiningYearChoices(on) {
+  const date = on || new Date();
+  const calendar = date.getFullYear();
+  const years = [];
+  for (let year = calendar; year >= calendar - 5; year--) {
+    years.push(year);
+  }
+  return years;
+}
+
+const STANDING_TONES = {
+  1: '--yellow',
+  2: '--green',
+  3: '--blue',
+  4: '--pink',
+  5: '--purple',
+};
+
+// Year 1-5 get a card color. Incoming and Finished stay on the plain surface.
+function cardStandingPresentation(standing) {
+  const match = /^Year ([1-5])$/.exec(standing || '');
+  if (!match) {
+    return { attribute: '', tone: '', text: standing || '' };
+  }
+  return {
+    attribute: ` data-standing="${match[1]}"`,
+    tone: STANDING_TONES[match[1]],
+    text: standing,
+  };
+}
 
 // 'CSE' -> 'Computer Science & Engg.'
 function branchName(code) {

@@ -14,7 +14,7 @@ class Student(TypedDict):
     id: int
     name: str
     branch: str
-    year: int
+    standing: str
     skills: list[str]
 
 
@@ -22,7 +22,7 @@ class SuggestedMember(TypedDict):
     id: int
     name: str
     branch: str
-    year: int
+    standing: str
     matched_skills: list[str]
     score: int
 
@@ -185,7 +185,7 @@ def suggest_members(
                 "id": student["id"],
                 "name": student["name"],
                 "branch": student["branch"],
-                "year": student["year"],
+                "standing": student["standing"],
                 "matched_skills": matched,
                 "score": _half_up(100 * len(matched), len(required)),
             }

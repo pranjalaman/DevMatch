@@ -569,6 +569,15 @@ textarea.input {
   .grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+.profile-section {
+  margin: 20px 0;
+}
+
+.profile-section-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
 /* ---------- Card ---------- */
 .card {
   display: flex;
@@ -583,6 +592,12 @@ textarea.input {
   text-decoration: none;
   transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease);
 }
+
+.card[data-standing="1"] { background: var(--yellow); }
+.card[data-standing="2"] { background: var(--green); }
+.card[data-standing="3"] { background: var(--blue); }
+.card[data-standing="4"] { background: var(--pink); }
+.card[data-standing="5"] { background: var(--purple); }
 
 .card:hover {
   transform: translate(-2px, -2px);

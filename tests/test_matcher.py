@@ -108,15 +108,15 @@ class MatchVisibilityTests(unittest.TestCase):
             "closed",
             1,
             [role(1, "Backend", ["python"])],
-            [{"id": 2, "name": "Ada", "branch": "CSE", "year": 1, "skills": ["python"]}],
+            [{"id": 2, "name": "Ada", "branch": "CSE", "standing": "Year 1", "skills": ["python"]}],
         )
         self.assertEqual(groups, [])
 
     def test_suggestions_skip_the_owner_and_sort_names(self):
         students = [
-            {"id": 1, "name": "Owner", "branch": "CSE", "year": 2, "skills": ["python"]},
-            {"id": 2, "name": "bina", "branch": "IT", "year": 1, "skills": ["python"]},
-            {"id": 3, "name": "Ada", "branch": "ECE", "year": 1, "skills": ["python"]},
+            {"id": 1, "name": "Owner", "branch": "CSE", "standing": "Year 2", "skills": ["python"]},
+            {"id": 2, "name": "bina", "branch": "IT", "standing": "Year 1", "skills": ["python"]},
+            {"id": 3, "name": "Ada", "branch": "ECE", "standing": "Year 1", "skills": ["python"]},
         ]
         suggestions = suggest_members(1, ["python"], students)
         self.assertEqual([person["name"] for person in suggestions], ["Ada", "bina"])

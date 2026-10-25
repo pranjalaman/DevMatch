@@ -399,7 +399,7 @@ async function loadSuggestions(projectId) {
         html += `
           <li class="suggest-item">
             <span><strong>${escapeHtml(person.name)}</strong>
-              <span class="muted">· ${escapeHtml(branchName(person.branch))}, Year ${person.year}</span></span>
+              <span class="muted">· ${escapeHtml(branchName(person.branch))}, ${escapeHtml(person.standing)}</span></span>
             <ul class="chips">${chips}</ul>
           </li>`;
       }

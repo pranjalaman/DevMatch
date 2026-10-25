@@ -1,4 +1,5 @@
 import psycopg
+from app.academic_year import with_standing
 from app.database.db import get_db
 from app.schemas.auth import AuthResponse, LoginData, SignupData
 from app.rate_limit import enforce_auth_limit, enforce_write_limit
@@ -19,16 +20,16 @@ def signup(data: SignupData, request: Request, connection=Depends(get_db)):
     try:
         user = connection.execute(
             """
-            INSERT INTO users (name, email, password_hash, branch, year)
+            INSERT INTO users (name, email, password_hash, branch, joined_year)
             VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, name, email, branch, year
+            RETURNING id, name, email, branch, joined_year, github_url, gender, dob
             """,
             (
                 data.name,
                 str(data.email).lower(),
                 password_hash.hash(data.password),
                 data.branch,
-                data.year,
+                data.joined_year,
             ),
         ).fetchone()
     except psycopg.errors.UniqueViolation:
@@ -37,7 +38,7 @@ def signup(data: SignupData, request: Request, connection=Depends(get_db)):
         raise HTTPException(status_code=503, detail="Could not connect to the database")
 
     request.session["user_id"] = user["id"]
-    return {"user": user}
+    return {"user": with_standing(user)}
 
 
 @router.post(
@@ -49,7 +50,7 @@ def login(data: LoginData, request: Request, connection=Depends(get_db)):
     try:
         user = connection.execute(
             """
-            SELECT id, name, email, branch, year, password_hash
+            SELECT id, name, email, branch, joined_year, github_url, gender, dob, password_hash
             FROM users
             WHERE lower(email) = %s
             """,
@@ -65,7 +66,7 @@ def login(data: LoginData, request: Request, connection=Depends(get_db)):
 
     request.session["user_id"] = user["id"]
     del user["password_hash"]
-    return {"user": user}
+    return {"user": with_standing(user)}
 
 
 @router.post("/logout")

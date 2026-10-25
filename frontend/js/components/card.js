@@ -37,8 +37,10 @@ function projectCardHtml(project) {
     closedBadge = '<span><span class="status status-closed">Closed</span></span>';
   }
 
+  const standing = cardStandingPresentation(project.owner.standing);
+
   return `
-    <a class="card" href="#/project/${project.id}" data-id="${project.id}">
+    <a class="card" href="#/project/${project.id}" data-id="${project.id}"${standing.attribute}>
       <div class="card-top">
         <h3 class="card-title">${escapeHtml(project.title)}</h3>
         ${matchBadge}
@@ -55,7 +57,7 @@ function projectCardHtml(project) {
 
       <div class="card-foot">
         <span class="card-roles">Open roles: <span class="count-badge">${project.open_roles}</span></span>
-        <span class="card-lead">Lead: <strong>${escapeHtml(project.owner.name)}</strong></span>
+        <span class="card-lead">Lead: <strong>${escapeHtml(project.owner.name)}</strong> · ${escapeHtml(standing.text)}</span>
       </div>
     </a>`;
 }

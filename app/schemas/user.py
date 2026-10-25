@@ -1,3 +1,5 @@
+from datetime import date
+
 from pydantic import BaseModel, EmailStr
 
 
@@ -6,5 +8,8 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     branch: str
-    year: int
+    joined_year: int
+    standing: str
     github_url: str | None = None
+    gender: str | None = None
+    dob: date | None = None
