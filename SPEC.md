@@ -461,3 +461,4 @@ An entry in this list is not a promise and it is not how the product works. The 
 - **Decide what** `project_skills` **is for.** The table is in the database. The app derives tags from role skills and does not read or write `project_skills`.
 - **A health check that notices the database.** `/api/health` only reports that the process is up. A bad `DATABASE_URL` shows up later, as a `503` on a real request.
 - **Rate limits that survive a restart.** Auth is 10 requests a minute per IP and writes are 60 a minute per user, counted in memory inside one process.
+- **AI for generating clean and better summary and descriptions when adding a project**

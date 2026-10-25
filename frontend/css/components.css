@@ -1638,6 +1638,11 @@ textarea.input {
   font-size: 0.88rem;
 }
 
+.profile-section .field {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
 .profile-actions {
   display: flex;
   flex-wrap: wrap;
