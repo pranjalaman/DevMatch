@@ -22,7 +22,7 @@ DevMatch helps BIT Sindri students find projects that fit their skills—and hel
 
 ## Run locally
 
-1. Set up PostgreSQL using the schema in [SPEC.md](./SPEC.md).
+1. Point `DATABASE_URL` at a PostgreSQL database that already has the DevMatch tables.
 2. Create `.env` in the project folder:
 
    ```env
