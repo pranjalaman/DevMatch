@@ -452,7 +452,8 @@ An entry in this list is not a promise and it is not how the product works. The 
 
 - **Let a lead reach a suggested student.** Suggestions today are name, branch, and study standing. A lead still has no way to contact that person, and the student's email stays off the suggestion on purpose.
 - **Someone besides the owner can take a listing down.** Spam and abandoned posts can only be edited or deleted by the student who created them.
-- **Open listings that go quiet.** A project can stay `open` forever, including one whose roles are all filled. Nothing nudges the lead or moves a stale listing off the default feed.
+- **Open listings that go quiet.** A project can stay `open` forever, including one whose roles are all filled. Nothing nudges the lead or moves a stale listing off the default feed. [Add End Date ]
+- **Feed mixes all the listings** Seperate the own listing from others. 
 - **Prove the signup email.** Any address is accepted, and the branch list is the only campus fence. Confirming the inbox, or requiring a college domain, would make an account harder to fake.
 - **Sign in with GitHub.** Accounts are email and password only.
 - **Generated card summaries.** Descriptions are whatever the lead wrote. Nothing rewrites them.
